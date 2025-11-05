@@ -205,3 +205,29 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Streamlit secrets - NUNCA COMMITAR!
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+
+# Banco de dados local
+*.db
+*.sqlite
+backup_*
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
