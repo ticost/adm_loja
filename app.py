@@ -10,8 +10,8 @@ import hashlib
 import calendar
 import shutil
 from dateutil.relativedelta import relativedelta
-import mysql.connector
-from mysql.connector import Error
+import pymysql
+from pymysql import Error
 
 # Configuração da página para melhor responsividade
 st.set_page_config(
@@ -81,36 +81,19 @@ PERMISSOES = {
 # =============================================================================
 
 def get_db_connection():
-    """Cria conexão com o PlanetScale"""
+    """Cria conexão com o PlanetScale usando PyMySQL"""
     try:
-        # Verificar se os secrets estão disponíveis
-        required_secrets = ["host", "user", "password", "database"]
-        for secret in required_secrets:
-            if secret not in st.secrets["planetscale"]:
-                st.error(f"❌ Secret '{secret}' não encontrado")
-                return None
-        
-        connection = mysql.connector.connect(
+        # Usando secrets do Streamlit
+        connection = pymysql.connect(
             host=st.secrets["planetscale"]["host"],
             user=st.secrets["planetscale"]["user"],
             password=st.secrets["planetscale"]["password"],
             database=st.secrets["planetscale"]["database"],
-            ssl_verify_identity=True,
-            ssl_verify_cert=True
+            ssl={'ca': '/etc/ssl/certs/ca-certificates.crt'}  # SSL para PlanetScale
         )
-        
-        # Testar a conexão
-        if connection.is_connected():
-            return connection
-        else:
-            st.error("❌ Não foi possível estabelecer conexão")
-            return None
-            
+        return connection
     except Error as e:
         st.error(f"❌ Erro de conexão com o banco: {e}")
-        return None
-    except Exception as e:
-        st.error(f"❌ Erro inesperado: {e}")
         return None
 
 # =============================================================================
