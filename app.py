@@ -830,7 +830,7 @@ if 'logged_in' not in st.session_state:
 
 # Inicializar bancos de dados
 init_db()
-init_auth_db()
+#init_auth_db()
 
 # =============================================================================
 # PÁGINA DE LOGIN
