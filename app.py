@@ -77,24 +77,57 @@ PERMISSOES = {
 }
 
 # =============================================================================
-# CONEXÃO COM PLANETSCALE - CREDENCIAIS FIXAS
+# CONEXÃO COM PLANETSCALE - USANDO SECRETS
 # =============================================================================
 
 def get_db_connection():
     """Cria conexão com o PlanetScale usando PyMySQL"""
     try:
-        # CREDENCIAIS FIXAS - SEM USAR SECRETS
+        # Verificar se os secrets estão configurados
+        if "planetscale" not in st.secrets:
+            st.error("❌ Secrets do PlanetScale não configurados")
+            return None
+        
+        secrets = st.secrets["planetscale"]
+        
+        # Verificar campos obrigatórios
+        required_fields = ["host", "user", "password", "database"]
+        missing_fields = []
+        
+        for field in required_fields:
+            if field not in secrets:
+                missing_fields.append(field)
+            elif not secrets[field]:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            st.error(f"❌ Campos faltando nos secrets: {', '.join(missing_fields)}")
+            return None
+        
+        # Tentar conexão
         connection = pymysql.connect(
-            host="aws.connect.psdb.cloud",
-            user="obyoj6ohvvgsf8ty0ibf",
-            password="pscale_pw_V5y2sSppg6SJ7lHaH7Uu6ib75lMHNuAnv1Xb4Tcm57O",
-            database="adm_loja",
+            host=secrets["host"],
+            user=secrets["user"],
+            password=secrets["password"],
+            database=secrets["database"],
             ssl={'ca': '/etc/ssl/certs/ca-certificates.crt'},
             connect_timeout=10
         )
         return connection
-    except Error as e:
-        st.error(f"❌ Erro de conexão com o banco: {e}")
+        
+    except pymysql.MySQLError as e:
+        error_code = e.args[0]
+        if error_code == 1045:
+            st.error("❌ Erro 1045: Acesso negado. Verifique usuário e senha nos Secrets.")
+        elif error_code == 1044:
+            st.error("❌ Erro 1044: Acesso negado ao banco de dados.")
+        elif error_code == 2003:
+            st.error("❌ Erro 2003: Não foi possível conectar ao servidor.")
+        else:
+            st.error(f"❌ Erro MySQL {error_code}: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Erro de conexão: {e}")
         return None
 
 # =============================================================================
@@ -883,6 +916,26 @@ if 'logged_in' not in st.session_state:
 
 if not st.session_state.logged_in:
     st.title("🔐 Login - Livro Caixa")
+    
+    # Verificar se os secrets estão configurados
+    if "planetscale" not in st.secrets:
+        st.error("""
+        ## ❌ Secrets do PlanetScale não configurados
+        
+        Para usar o sistema, configure os Secrets no Streamlit Cloud:
+        
+        1. Vá em **Settings** → **Secrets**
+        2. Cole este formato:
+        ```toml
+        [planetscale]
+        host = "aws.connect.psdb.cloud"
+        user = "seu-usuario"
+        password = "sua-senha"
+        database = "seu-database"
+        ```
+        3. Clique em **Save**
+        """)
+        st.stop()
     
     # Testar conexão com o banco
     conn = get_db_connection()
