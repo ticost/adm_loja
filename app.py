@@ -1,4 +1,4 @@
-# app.py - VERSÃO COM DEBUG
+# app.py - VERSÃO COMPLETA CORRIGIDA
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -12,6 +12,9 @@ import shutil
 from dateutil.relativedelta import relativedelta
 import pymysql
 from pymysql import Error
+from PIL import Image
+import requests
+from io import BytesIO
 
 # Configuração da página
 st.set_page_config(
@@ -29,43 +32,61 @@ PERMISSOES = {
 }
 
 # =============================================================================
-# CONEXÃO COM PLANETSCALE - COM DEBUG
+# FUNÇÃO PARA CARREGAR IMAGEM DO LOGO (CORRIGIDA)
+# =============================================================================
+
+def carregar_imagem_logo(nome_arquivo):
+    """Carrega a imagem do logo com múltiplas tentativas de caminho"""
+    try:
+        # Tenta diferentes caminhos possíveis
+        caminhos_tentativos = [
+            nome_arquivo,
+            f"imagens/{nome_arquivo}",
+            f"assets/{nome_arquivo}",
+            f"static/{nome_arquivo}",
+            f"../{nome_arquivo}",
+            f"./{nome_arquivo}"
+        ]
+        
+        for caminho in caminhos_tentativos:
+            if os.path.exists(caminho):
+                st.sidebar.image(caminho, use_column_width=True)
+                return True
+        
+        # Se não encontrou, mostra placeholder
+        st.sidebar.markdown("""
+        <div style="text-align: center; padding: 20px; border: 2px dashed #ccc; border-radius: 10px;">
+            <div style="font-size: 48px;">🏢</div>
+            <div style="color: #666;">Logo da Loja</div>
+        </div>
+        """, unsafe_allow_html=True)
+        return False
+        
+    except Exception as e:
+        st.sidebar.info("💡 Para usar seu logo, adicione o arquivo 'Logo_Loja.png' na raiz do projeto")
+        return False
+
+# =============================================================================
+# CONEXÃO COM PLANETSCALE
 # =============================================================================
 
 def get_db_connection():
     """Cria conexão com o PlanetScale usando PyMySQL"""
     try:
-        # DEBUG: Verificar se os secrets estão disponíveis
-        st.write("🔍 Verificando secrets...")
-        
         if "planetscale" not in st.secrets:
             st.error("❌ Secrets do PlanetScale não encontrados")
-            st.info("💡 Configure os secrets no Streamlit Cloud: Settings → Secrets")
             return None
         
         secrets = st.secrets["planetscale"]
-        st.write(f"✅ Secrets encontrados: {list(secrets.keys())}")
         
         # Verificar campos obrigatórios
         required_fields = ["host", "user", "password", "database"]
-        missing_fields = []
-        
         for field in required_fields:
-            if field not in secrets:
-                missing_fields.append(field)
-                st.error(f"❌ Campo '{field}' não encontrado")
-            elif not secrets[field]:
-                missing_fields.append(field)
-                st.error(f"❌ Campo '{field}' está vazio")
-            else:
-                st.write(f"✅ Campo '{field}': {secrets[field][:10]}...")
-        
-        if missing_fields:
-            st.error(f"❌ Campos faltando: {', '.join(missing_fields)}")
-            return None
+            if field not in secrets or not secrets[field]:
+                st.error(f"❌ Campo '{field}' não encontrado ou vazio")
+                return None
         
         # Tentar conexão
-        st.write("🔗 Tentando conectar ao banco...")
         connection = pymysql.connect(
             host=secrets["host"],
             user=secrets["user"],
@@ -75,7 +96,6 @@ def get_db_connection():
             connect_timeout=10
         )
         
-        st.success("✅ Conexão bem-sucedida!")
         return connection
         
     except pymysql.MySQLError as e:
@@ -91,6 +111,557 @@ def get_db_connection():
         return None
     except Exception as e:
         st.error(f"❌ Erro de conexão: {e}")
+        return None
+
+# =============================================================================
+# FUNÇÕES DE AUTENTICAÇÃO
+# =============================================================================
+
+def init_auth_db():
+    """Inicializa a tabela de usuários com permissões"""
+    conn = get_db_connection()
+    if not conn:
+        return
+    
+    try:
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                permissao ENUM('admin', 'editor', 'visualizador') DEFAULT 'visualizador',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Inserir usuários padrão se não existirem
+        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = "admin"')
+        if cursor.fetchone()[0] == 0:
+            # Senha padrão: "admin123"
+            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            cursor.execute(
+                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
+                ('admin', password_hash, 'admin')
+            )
+            
+            # Usuário visualizador padrão
+            password_hash_viewer = hashlib.sha256('visual123'.encode()).hexdigest()
+            cursor.execute(
+                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
+                ('visual', password_hash_viewer, 'visualizador')
+            )
+        
+        conn.commit()
+    except Error as e:
+        st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def login_user(username, password):
+    """Autentica usuário"""
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão"
+    
+    try:
+        cursor = conn.cursor()
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        cursor.execute(
+            'SELECT username, permissao FROM usuarios WHERE username = %s AND password_hash = %s',
+            (username, password_hash)
+        )
+        
+        result = cursor.fetchone()
+        if result:
+            return True, result
+        else:
+            return False, "Usuário ou senha incorretos"
+    except Error as e:
+        return False, f"Erro de banco: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def logout_user():
+    """Faz logout do usuário"""
+    st.session_state.logged_in = False
+    st.session_state.username = None
+    st.session_state.permissao = None
+
+def user_is_admin():
+    """Verifica se usuário é admin"""
+    return st.session_state.permissao == 'admin'
+
+def user_can_edit():
+    """Verifica se usuário pode editar (admin ou editor)"""
+    return st.session_state.permissao in ['admin', 'editor']
+
+def get_all_users():
+    """Busca todos os usuários (apenas admin)"""
+    if not user_is_admin():
+        return []
+    
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT username, permissao, created_at FROM usuarios ORDER BY created_at')
+        return cursor.fetchall()
+    except Error:
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def update_user_permission(username, nova_permissao):
+    """Atualiza permissão do usuário"""
+    if not user_is_admin():
+        return False, "Apenas administradores podem atualizar permissões"
+    
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão"
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE usuarios SET permissao = %s WHERE username = %s',
+            (nova_permissao, username)
+        )
+        conn.commit()
+        return True, "Permissão atualizada com sucesso"
+    except Error as e:
+        return False, f"Erro ao atualizar: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def delete_user(username):
+    """Exclui usuário"""
+    if not user_is_admin():
+        return False, "Apenas administradores podem excluir usuários"
+    
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão"
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM usuarios WHERE username = %s', (username,))
+        conn.commit()
+        return True, "Usuário excluído com sucesso"
+    except Error as e:
+        return False, f"Erro ao excluir: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def change_password(username, new_password):
+    """Altera senha do usuário"""
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão"
+    
+    try:
+        cursor = conn.cursor()
+        password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+        cursor.execute(
+            'UPDATE usuarios SET password_hash = %s WHERE username = %s',
+            (password_hash, username)
+        )
+        conn.commit()
+        return True, "Senha alterada com sucesso"
+    except Error as e:
+        return False, f"Erro ao alterar senha: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+# =============================================================================
+# FUNÇÕES DO SISTEMA PRINCIPAL
+# =============================================================================
+
+def init_db():
+    """Inicializa as demais tabelas do sistema"""
+    conn = get_db_connection()
+    if not conn:
+        return
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Tabela de lançamentos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lancamentos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                mes VARCHAR(20) NOT NULL,
+                data DATE NOT NULL,
+                historico TEXT NOT NULL,
+                complemento TEXT,
+                entrada DECIMAL(15,2) DEFAULT 0.00,
+                saida DECIMAL(15,2) DEFAULT 0.00,
+                saldo DECIMAL(15,2) DEFAULT 0.00,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Tabela de contas
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS contas (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nome VARCHAR(100) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Tabela de eventos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS eventos_calendario (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                titulo VARCHAR(200) NOT NULL,
+                descricao TEXT,
+                data_evento DATE NOT NULL,
+                hora_evento TIME,
+                tipo_evento VARCHAR(50),
+                cor_evento VARCHAR(20),
+                created_by VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        conn.commit()
+    except Error as e:
+        st.error(f"❌ Erro ao criar tabelas: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def get_contas():
+    """Busca todas as contas"""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT nome FROM contas ORDER BY nome')
+        return [row[0] for row in cursor.fetchall()]
+    except Error:
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def adicionar_conta(nome_conta):
+    """Adiciona nova conta"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO contas (nome) VALUES (%s)', (nome_conta,))
+        conn.commit()
+        st.success(f"✅ Conta '{nome_conta}' adicionada com sucesso!")
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao adicionar conta: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def get_lancamentos_mes(mes):
+    """Busca lançamentos do mês"""
+    conn = get_db_connection()
+    if not conn:
+        return pd.DataFrame()
+    
+    try:
+        query = 'SELECT * FROM lancamentos WHERE mes = %s ORDER BY data, id'
+        df = pd.read_sql(query, conn, params=[mes])
+        return df
+    except Error:
+        return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
+
+def salvar_lancamento(mes, data, historico, complemento, entrada, saida, saldo):
+    """Salva novo lançamento"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO lancamentos (mes, data, historico, complemento, entrada, saida, saldo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (mes, data, historico, complemento, entrada, saida, saldo))
+        conn.commit()
+        st.success("✅ Lançamento salvo com sucesso!")
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao salvar lançamento: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def atualizar_lancamento(lancamento_id, mes, data, historico, complemento, entrada, saida):
+    """Atualiza lançamento existente"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Primeiro busca o lançamento atual para calcular novo saldo
+        cursor.execute('SELECT * FROM lancamentos WHERE id = %s', (lancamento_id,))
+        lancamento_antigo = cursor.fetchone()
+        
+        if not lancamento_antigo:
+            st.error("❌ Lançamento não encontrado")
+            return False
+        
+        # Atualiza o lançamento
+        cursor.execute('''
+            UPDATE lancamentos 
+            SET data = %s, historico = %s, complemento = %s, entrada = %s, saida = %s
+            WHERE id = %s
+        ''', (data, historico, complemento, entrada, saida, lancamento_id))
+        
+        # Recalcula todos os saldos do mês
+        cursor.execute('SELECT * FROM lancamentos WHERE mes = %s ORDER BY data, id', (mes,))
+        lancamentos = cursor.fetchall()
+        
+        saldo_atual = 0.0
+        for lanc in lancamentos:
+            entrada_val = float(lanc[5]) if lanc[5] else 0.0
+            saida_val = float(lanc[6]) if lanc[6] else 0.0
+            saldo_atual += entrada_val - saida_val
+            
+            cursor.execute(
+                'UPDATE lancamentos SET saldo = %s WHERE id = %s',
+                (saldo_atual, lanc[0])
+            )
+        
+        conn.commit()
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao atualizar lançamento: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def excluir_lancamento(lancamento_id, mes):
+    """Exclui lançamento"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Exclui o lançamento
+        cursor.execute('DELETE FROM lancamentos WHERE id = %s', (lancamento_id,))
+        
+        # Recalcula saldos dos lançamentos restantes
+        cursor.execute('SELECT * FROM lancamentos WHERE mes = %s ORDER BY data, id', (mes,))
+        lancamentos = cursor.fetchall()
+        
+        saldo_atual = 0.0
+        for lanc in lancamentos:
+            entrada_val = float(lanc[5]) if lanc[5] else 0.0
+            saida_val = float(lanc[6]) if lanc[6] else 0.0
+            saldo_atual += entrada_val - saida_val
+            
+            cursor.execute(
+                'UPDATE lancamentos SET saldo = %s WHERE id = %s',
+                (saldo_atual, lanc[0])
+            )
+        
+        conn.commit()
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao excluir lançamento: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def limpar_lancamentos_mes(mes):
+    """Limpa todos os lançamentos do mês"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM lancamentos WHERE mes = %s', (mes,))
+        conn.commit()
+        st.success(f"✅ Todos os lançamentos de {mes} foram excluídos!")
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao limpar lançamentos: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def get_eventos_mes(ano, mes):
+    """Busca eventos do mês"""
+    conn = get_db_connection()
+    if not conn:
+        return pd.DataFrame()
+    
+    try:
+        data_inicio = f"{ano}-{mes:02d}-01"
+        if mes == 12:
+            data_fim = f"{ano+1}-01-01"
+        else:
+            data_fim = f"{ano}-{mes+1:02d}-01"
+        
+        query = '''
+            SELECT * FROM eventos_calendario 
+            WHERE data_evento >= %s AND data_evento < %s 
+            ORDER BY data_evento, hora_evento
+        '''
+        df = pd.read_sql(query, conn, params=[data_inicio, data_fim])
+        return df
+    except Error:
+        return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
+
+def gerar_calendario(ano, mes):
+    """Gera matriz do calendário"""
+    cal = calendar.Calendar(firstweekday=6)  # Domingo como primeiro dia
+    return cal.monthdatescalendar(ano, mes)
+
+def salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
+    """Salva novo evento"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO eventos_calendario (titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento, st.session_state.username))
+        
+        conn.commit()
+        st.success("✅ Evento salvo com sucesso!")
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao salvar evento: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
+    """Atualiza evento existente"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE eventos_calendario 
+            SET titulo = %s, descricao = %s, data_evento = %s, hora_evento = %s, tipo_evento = %s, cor_evento = %s
+            WHERE id = %s
+        ''', (titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento, evento_id))
+        
+        conn.commit()
+        st.success("✅ Evento atualizado com sucesso!")
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao atualizar evento: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def excluir_evento(evento_id):
+    """Exclui evento"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM eventos_calendario WHERE id = %s', (evento_id,))
+        conn.commit()
+        st.success("✅ Evento excluído com sucesso!")
+        return True
+    except Error as e:
+        st.error(f"❌ Erro ao excluir evento: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def download_csv_mes(mes):
+    """Gera CSV do mês"""
+    df = get_lancamentos_mes(mes)
+    if df.empty:
+        return None
+    
+    return df.to_csv(index=False, encoding='utf-8')
+
+def exportar_para_csv():
+    """Exporta todos os dados para ZIP"""
+    try:
+        # Criar arquivo ZIP em memória
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+            # Exportar lançamentos por mês
+            meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+            
+            for mes in meses:
+                df_mes = get_lancamentos_mes(mes)
+                if not df_mes.empty:
+                    csv_data = df_mes.to_csv(index=False, encoding='utf-8')
+                    zip_file.writestr(f"lancamentos_{mes}.csv", csv_data)
+            
+            # Exportar contas
+            conn = get_db_connection()
+            if conn:
+                try:
+                    df_contas = pd.read_sql("SELECT * FROM contas", conn)
+                    if not df_contas.empty:
+                        csv_contas = df_contas.to_csv(index=False, encoding='utf-8')
+                        zip_file.writestr("contas.csv", csv_contas)
+                    
+                    # Exportar eventos
+                    df_eventos = pd.read_sql("SELECT * FROM eventos_calendario", conn)
+                    if not df_eventos.empty:
+                        csv_eventos = df_eventos.to_csv(index=False, encoding='utf-8')
+                        zip_file.writestr("eventos.csv", csv_eventos)
+                finally:
+                    conn.close()
+        
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue()
+    
+    except Exception as e:
+        st.error(f"❌ Erro na exportação: {e}")
         return None
 
 # =============================================================================
@@ -156,114 +727,6 @@ if "planetscale" not in st.secrets:
 # Se chegou aqui, os secrets existem - continuar com o app normal
 st.success("✅ Secrets configurados! Inicializando sistema...")
 
-# ... (O RESTO DO SEU CÓDIGO ORIGINAL AQUI - todas as funções e páginas)
-# =============================================================================
-# FUNÇÕES DE AUTENTICAÇÃO (mantenha todo o seu código original aqui)
-# =============================================================================
-
-def init_auth_db():
-    """Inicializa a tabela de usuários com permissões"""
-    conn = get_db_connection()
-    if not conn:
-        st.error("❌ Não foi possível conectar ao banco de dados para inicialização.")
-        return
-    
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                permissao ENUM('admin', 'editor', 'visualizador') DEFAULT 'visualizador',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Inserir usuários padrão se não existirem
-        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = "admin"')
-        if cursor.fetchone()[0] == 0:
-            # Senha padrão: "admin123"
-            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute(
-                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
-                ('admin', password_hash, 'admin')
-            )
-            
-            # Usuário visualizador padrão
-            password_hash_viewer = hashlib.sha256('visual123'.encode()).hexdigest()
-            cursor.execute(
-                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
-                ('visual', password_hash_viewer, 'visualizador')
-            )
-        
-        conn.commit()
-        st.success("✅ Banco de autenticação inicializado com sucesso!")
-    except Error as e:
-        st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-def init_db():
-    """Inicializa as demais tabelas do sistema"""
-    conn = get_db_connection()
-    if not conn:
-        return
-    
-    try:
-        cursor = conn.cursor()
-        
-        # Tabela de lançamentos
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS lancamentos (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                mes VARCHAR(20) NOT NULL,
-                data DATE NOT NULL,
-                historico TEXT NOT NULL,
-                complemento TEXT,
-                entrada DECIMAL(15,2) DEFAULT 0.00,
-                saida DECIMAL(15,2) DEFAULT 0.00,
-                saldo DECIMAL(15,2) DEFAULT 0.00,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Tabela de contas
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS contas (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                nome VARCHAR(100) UNIQUE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Tabela de eventos
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS eventos_calendario (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                titulo VARCHAR(200) NOT NULL,
-                descricao TEXT,
-                data_evento DATE NOT NULL,
-                hora_evento TIME,
-                tipo_evento VARCHAR(50),
-                cor_evento VARCHAR(20),
-                created_by VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        conn.commit()
-        st.success("✅ Tabelas do sistema inicializadas com sucesso!")
-    except Error as e:
-        st.error(f"❌ Erro ao criar tabelas: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-# ... (CONTINUE COM TODO O RESTO DO SEU CÓDIGO ORIGINAL)
-
 # =============================================================================
 # INICIALIZAÇÃO DO SISTEMA
 # =============================================================================
@@ -290,7 +753,7 @@ else:
     st.error("❌ Falha na conexão com o banco")
 
 # =============================================================================
-# PÁGINA DE LOGIN (seu código original)
+# PÁGINA DE LOGIN
 # =============================================================================
 
 if not st.session_state.logged_in:
@@ -315,22 +778,19 @@ if not st.session_state.logged_in:
             
             if submitted:
                 if username and password:
-                    # Aqui você precisa implementar a função login_user
-                    # Por enquanto, vou simular um login bem-sucedido
-                    if username == "admin" and password == "admin123":
+                    success, result = login_user(username, password)
+                    if success:
                         st.session_state.logged_in = True
-                        st.session_state.username = username
-                        st.session_state.permissao = "admin"
+                        st.session_state.username = result[0]
+                        st.session_state.permissao = result[1]
                         st.success(f"✅ Bem-vindo, {username}!")
                         st.rerun()
                     else:
-                        st.error("❌ Usuário ou senha incorretos!")
+                        st.error(f"❌ {result}")
                 else:
                     st.warning("⚠️ Preencha todos os campos!")
     
     st.stop()
-
-# ... (CONTINUE COM O RESTO DA APLICAÇÃO)
 
 # =============================================================================
 # APLICAÇÃO PRINCIPAL (APENAS PARA USUÁRIOS LOGADOS)
@@ -338,11 +798,8 @@ if not st.session_state.logged_in:
 
 # Sidebar com logo e informações do usuário
 with st.sidebar:
-    # Tenta carregar a imagem do logo
+    # Carrega a imagem do logo
     logo_carregado = carregar_imagem_logo("Logo_Loja.png")
-    
-    if not logo_carregado:
-        st.sidebar.info("💡 Para usar seu logo, coloque o arquivo 'Logo_Loja.png' na mesma pasta do aplicativo")
     
     st.title("📒 Livro Caixa")
     
@@ -365,8 +822,11 @@ with st.sidebar:
             if st.form_submit_button("💾 Alterar Senha"):
                 if new_password and confirm_password:
                     if new_password == confirm_password:
-                        change_password(st.session_state.username, new_password)
-                        st.success("✅ Senha alterada com sucesso!")
+                        success, message = change_password(st.session_state.username, new_password)
+                        if success:
+                            st.success("✅ Senha alterada com sucesso!")
+                        else:
+                            st.error(f"❌ {message}")
                     else:
                         st.error("❌ As senhas não coincidem!")
                 else:
@@ -529,6 +989,13 @@ elif pagina == "Contas":
     
     # Buscar contas do banco
     contas = get_contas()
+    
+    if contas:
+        st.subheader("📋 Contas Cadastradas")
+        for i, conta in enumerate(contas, 1):
+            st.write(f"{i}. **{conta}**")
+    else:
+        st.info("📭 Nenhuma conta cadastrada ainda.")
     
     # Apenas usuários com permissão de edição podem adicionar contas
     if user_can_edit():
@@ -830,7 +1297,7 @@ elif pagina == "Calendário":
     cols = st.columns(7)
     for i, dia in enumerate(dias_semana):
         with cols[i]:
-            st.markdown(f'<div class="calendar-header">{dia}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align: center; font-weight: bold; padding: 10px; background-color: #f0f2f6; border-radius: 5px;">{dia}</div>', unsafe_allow_html=True)
     
     # Dias do calendário
     for semana in calendario:
@@ -843,23 +1310,22 @@ elif pagina == "Calendário":
                     tem_eventos = len(eventos_dia) > 0
                     
                     # Destacar o dia atual
-                    estilo_dia = "background-color: #e6f3ff;" if dia == hoje else ""
+                    estilo_dia = "background-color: #e6f3ff; border: 2px solid #1f77b4;" if dia == hoje else "border: 1px solid #ddd;"
                     
                     # Exibir o dia
                     st.markdown(
-                        f'<div class="calendar-day" style="{estilo_dia}">'
+                        f'<div style="{estilo_dia} padding: 10px; margin: 2px; border-radius: 5px; text-align: center; min-height: 80px;">'
                         f'<strong>{dia.day}</strong>'
-                        f'{"<div class=\"event-indicator\"></div>" if tem_eventos else ""}'
+                        f'{"<br><span style=\"color: red; font-size: 12px;\">●</span>" if tem_eventos else ""}'
                         f'</div>',
                         unsafe_allow_html=True
                     )
                     
                     # Adicionar interação para clicar no dia
-                    if st.button(f"📅 {dia.day}", key=f"dia_{dia}", use_container_width=True):
+                    if st.button(f"Selecionar", key=f"dia_{dia}", use_container_width=True):
                         st.session_state.dia_selecionado = dia
-                        st.rerun()
                 else:
-                    st.markdown('<div class="calendar-day"></div>', unsafe_allow_html=True)
+                    st.markdown('<div style="padding: 10px; margin: 2px; border-radius: 5px; min-height: 80px;"></div>', unsafe_allow_html=True)
     
     st.markdown("---")
     
