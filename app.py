@@ -83,7 +83,13 @@ PERMISSOES = {
 def get_db_connection():
     """Cria conexão com o PlanetScale"""
     try:
-        # Usando secrets do Streamlit
+        # Verificar se os secrets estão disponíveis
+        required_secrets = ["host", "user", "password", "database"]
+        for secret in required_secrets:
+            if secret not in st.secrets["planetscale"]:
+                st.error(f"❌ Secret '{secret}' não encontrado")
+                return None
+        
         connection = mysql.connector.connect(
             host=st.secrets["planetscale"]["host"],
             user=st.secrets["planetscale"]["user"],
@@ -92,9 +98,19 @@ def get_db_connection():
             ssl_verify_identity=True,
             ssl_verify_cert=True
         )
-        return connection
+        
+        # Testar a conexão
+        if connection.is_connected():
+            return connection
+        else:
+            st.error("❌ Não foi possível estabelecer conexão")
+            return None
+            
     except Error as e:
         st.error(f"❌ Erro de conexão com o banco: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Erro inesperado: {e}")
         return None
 
 # =============================================================================
