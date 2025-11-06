@@ -1,4 +1,4 @@
-# app.py - SISTEMA COMPLETO LIVRO CAIXA
+# app.py - SISTEMA COMPLETO LIVRO CAIXA CORRIGIDO
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -50,7 +50,7 @@ def carregar_imagem_logo(nome_arquivo):
         
         for caminho in caminhos_tentativos:
             if os.path.exists(caminho):
-                st.sidebar.image(caminho, use_column_width=True)
+                st.sidebar.image(caminho, width='stretch')  # CORRIGIDO: width='stretch'
                 return True
         
         # Se não encontrou, mostra placeholder
@@ -117,111 +117,49 @@ def get_db_connection():
 # FUNÇÕES DE AUTENTICAÇÃO
 # =============================================================================
 
-# reset_db.py - APENAS PARA RESET EMERGENCIAL
-import streamlit as st
-import pymysql
-import hashlib
-
-def reset_database():
-    st.title("🔄 Reset Emergencial do Banco")
-    
-    if "planetscale" not in st.secrets:
-        st.error("❌ Secrets não encontrados")
+def init_auth_db():
+    """Inicializa a tabela de usuários com permissões - CORRIGIDA"""
+    conn = get_db_connection()
+    if not conn:
         return
     
-    if st.button("🚨 RESETAR BANCO COMPLETO", type="secondary"):
-        if st.checkbox("✅ CONFIRMAR: Esta ação apagará TODOS os dados!"):
-            try:
-                conn = pymysql.connect(
-                    host=st.secrets["planetscale"]["host"],
-                    user=st.secrets["planetscale"]["user"],
-                    password=st.secrets["planetscale"]["password"],
-                    database=st.secrets["planetscale"]["database"],
-                    ssl={'ca': '/etc/ssl/certs/ca-certificates.crt'}
-                )
-                
-                cursor = conn.cursor()
-                
-                # Remover tabelas
-                cursor.execute('DROP TABLE IF EXISTS eventos_calendario')
-                cursor.execute('DROP TABLE IF EXISTS lancamentos')
-                cursor.execute('DROP TABLE IF EXISTS contas')
-                cursor.execute('DROP TABLE IF EXISTS usuarios')
-                
-                # Recriar tabelas corretamente
-                # Tabela de usuários
-                cursor.execute('''
-                    CREATE TABLE usuarios (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        username VARCHAR(50) UNIQUE NOT NULL,
-                        password_hash VARCHAR(255) NOT NULL,
-                        permissao ENUM('admin', 'editor', 'visualizador') NOT NULL DEFAULT 'visualizador',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Tabela de contas
-                cursor.execute('''
-                    CREATE TABLE contas (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        nome VARCHAR(100) UNIQUE NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Tabela de lançamentos
-                cursor.execute('''
-                    CREATE TABLE lancamentos (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        mes VARCHAR(20) NOT NULL,
-                        data DATE NOT NULL,
-                        historico TEXT NOT NULL,
-                        complemento TEXT,
-                        entrada DECIMAL(15,2) DEFAULT 0.00,
-                        saida DECIMAL(15,2) DEFAULT 0.00,
-                        saldo DECIMAL(15,2) DEFAULT 0.00,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Tabela de eventos
-                cursor.execute('''
-                    CREATE TABLE eventos_calendario (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        titulo VARCHAR(200) NOT NULL,
-                        descricao TEXT,
-                        data_evento DATE NOT NULL,
-                        hora_evento TIME,
-                        tipo_evento VARCHAR(50),
-                        cor_evento VARCHAR(20),
-                        created_by VARCHAR(50),
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                # Inserir usuários padrão
-                password_hash_admin = hashlib.sha256('admin123'.encode()).hexdigest()
-                cursor.execute(
-                    'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
-                    ('admin', password_hash_admin, 'admin')
-                )
-                
-                password_hash_visual = hashlib.sha256('visual123'.encode()).hexdigest()
-                cursor.execute(
-                    'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
-                    ('visual', password_hash_visual, 'visualizador')
-                )
-                
-                conn.commit()
-                conn.close()
-                
-                st.success("🎉 Banco resetado com sucesso!")
-                st.info("👤 Usuários criados: admin/admin123 e visual/visual123")
-                
-            except Exception as e:
-                st.error(f"❌ Erro no reset: {e}")
-
-reset_database()
+    try:
+        cursor = conn.cursor()
+        
+        # CORREÇÃO: Criar tabela com ENUM explícito
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                permissao ENUM('admin', 'editor', 'visualizador') NOT NULL DEFAULT 'visualizador',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Inserir usuários padrão se não existirem
+        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = "admin"')
+        if cursor.fetchone()[0] == 0:
+            # Senha padrão: "admin123"
+            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            cursor.execute(
+                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
+                ('admin', password_hash, 'admin')
+            )
+            
+            # Usuário visualizador padrão
+            password_hash_viewer = hashlib.sha256('visual123'.encode()).hexdigest()
+            cursor.execute(
+                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
+                ('visual', password_hash_viewer, 'visualizador')
+            )
+        
+        conn.commit()
+    except Error as e:
+        st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def login_user(username, password):
     """Autentica usuário"""
@@ -262,6 +200,45 @@ def user_is_admin():
 def user_can_edit():
     """Verifica se usuário pode editar (admin ou editor)"""
     return st.session_state.permissao in ['admin', 'editor']
+
+# =============================================================================
+# FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS
+# =============================================================================
+
+def criar_usuario(username, password, permissao):
+    """Cria um novo usuário no sistema"""
+    if not user_is_admin():
+        return False, "Apenas administradores podem criar usuários"
+    
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão com o banco"
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Verificar se usuário já existe
+        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = %s', (username,))
+        if cursor.fetchone()[0] > 0:
+            return False, "Usuário já existe"
+        
+        # Criar hash da senha
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        # Inserir novo usuário
+        cursor.execute(
+            'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)',
+            (username, password_hash, permissao)
+        )
+        
+        conn.commit()
+        return True, f"Usuário '{username}' criado com sucesso!"
+        
+    except Error as e:
+        return False, f"Erro ao criar usuário: {e}"
+    finally:
+        if conn:
+            conn.close()
 
 def get_all_users():
     """Busca todos os usuários (apenas admin)"""
@@ -309,6 +286,9 @@ def delete_user(username):
     """Exclui usuário"""
     if not user_is_admin():
         return False, "Apenas administradores podem excluir usuários"
+    
+    if username == st.session_state.username:
+        return False, "Você não pode excluir seu próprio usuário"
     
     conn = get_db_connection()
     if not conn:
@@ -450,7 +430,8 @@ def get_lancamentos_mes(mes):
         query = 'SELECT * FROM lancamentos WHERE mes = %s ORDER BY data, id'
         df = pd.read_sql(query, conn, params=[mes])
         return df
-    except Error:
+    except Exception as e:
+        st.error(f"Erro ao buscar lançamentos: {e}")
         return pd.DataFrame()
     finally:
         if conn:
@@ -601,7 +582,8 @@ def get_eventos_mes(ano, mes):
         '''
         df = pd.read_sql(query, conn, params=[data_inicio, data_fim])
         return df
-    except Error:
+    except Exception as e:
+        st.error(f"Erro ao buscar eventos: {e}")
         return pd.DataFrame()
     finally:
         if conn:
@@ -830,7 +812,7 @@ if 'logged_in' not in st.session_state:
 
 # Inicializar bancos de dados
 init_db()
-#init_auth_db()
+init_auth_db()
 
 # =============================================================================
 # PÁGINA DE LOGIN
@@ -854,7 +836,7 @@ if not st.session_state.logged_in:
             username = st.text_input("Usuário", placeholder="Digite seu usuário")
             password = st.text_input("Senha", type="password", placeholder="Digite sua senha")
             
-            submitted = st.form_submit_button("🚪 Entrar", use_container_width=True)
+            submitted = st.form_submit_button("🚪 Entrar", width='stretch')
             
             if submitted:
                 if username and password:
@@ -889,7 +871,7 @@ with st.sidebar:
     st.sidebar.info(f"🔐 **Permissão:** {PERMISSOES.get(st.session_state.permissao, 'Desconhecida')}")
     
     # Botão de logout
-    if st.sidebar.button("🚪 Sair", use_container_width=True):
+    if st.sidebar.button("🚪 Sair", width='stretch'):
         logout_user()
         st.rerun()
     
@@ -899,7 +881,7 @@ with st.sidebar:
             new_password = st.text_input("Nova Senha", type="password")
             confirm_password = st.text_input("Confirmar Senha", type="password")
             
-            if st.form_submit_button("💾 Alterar Senha"):
+            if st.form_submit_button("💾 Alterar Senha", width='stretch'):
                 if new_password and confirm_password:
                     if new_password == confirm_password:
                         success, message = change_password(st.session_state.username, new_password)
@@ -912,73 +894,22 @@ with st.sidebar:
                 else:
                     st.warning("⚠️ Preencha todos os campos!")
     
-    # Gerenciar usuários (apenas para admin)
-    if user_is_admin():
-        with st.sidebar.expander("👥 Gerenciar Usuários"):
-            st.subheader("Usuários do Sistema")
-            
-            # Listar usuários existentes
-            users = get_all_users()
-            if users:
-                st.write("**Usuários cadastrados:**")
-                for i, (username, permissao, created_at) in enumerate(users, 1):
-                    st.write(f"{i}. **{username}** - {PERMISSOES.get(permissao, 'Desconhecida')} - Criado em: {created_at}")
-                
-                st.markdown("---")
-                
-                # Editar permissões de usuário
-                st.subheader("Editar Permissões")
-                user_to_edit = st.selectbox(
-                    "Selecione o usuário para editar:",
-                    [user[0] for user in users if user[0] != 'admin']  # Não permitir editar admin
-                )
-                
-                if user_to_edit:
-                    # Buscar permissão atual do usuário
-                    permissao_atual = next((user[1] for user in users if user[0] == user_to_edit), 'visualizador')
-                    
-                    nova_permissao = st.selectbox(
-                        "Nova permissão:",
-                        options=list(PERMISSOES.keys()),
-                        index=list(PERMISSOES.keys()).index(permissao_atual),
-                        format_func=lambda x: PERMISSOES[x]
-                    )
-                    
-                    if st.button("💾 Atualizar Permissão", use_container_width=True):
-                        if nova_permissao != permissao_atual:
-                            success, message = update_user_permission(user_to_edit, nova_permissao)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-                
-                st.markdown("---")
-                
-                # Excluir usuário
-                st.subheader("Excluir Usuário")
-                user_to_delete = st.selectbox(
-                    "Selecione o usuário para excluir:",
-                    [user[0] for user in users if user[0] != st.session_state.username]
-                )
-                
-                if user_to_delete:
-                    if st.button("🗑️ Excluir Usuário", use_container_width=True):
-                        if st.checkbox("✅ Confirmar exclusão do usuário"):
-                            success, message = delete_user(user_to_delete)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-            else:
-                st.info("Nenhum usuário cadastrado.")
-    
     st.markdown("---")
+    
+    # Menu de navegação ATUALIZADO
+    opcoes_menu = [
+        "📋 Ajuda", 
+        "👥 Gerenciar Usuários",
+        "📝 Contas", 
+        "📥 Lançamentos", 
+        "📅 Calendário", 
+        "📈 Balanço Financeiro", 
+        "💾 Exportar Dados"
+    ]
     
     pagina = st.radio(
         "**Navegação:**",
-        ["📋 Ajuda", "📝 Contas", "📥 Lançamentos", "📅 Calendário", "📈 Balanço Financeiro", "💾 Exportar Dados"],
+        opcoes_menu,
         label_visibility="collapsed"
     )
 
@@ -1061,6 +992,155 @@ if pagina == "📋 Ajuda":
         """)
 
 # =============================================================================
+# PÁGINA: GERENCIAR USUÁRIOS
+# =============================================================================
+
+elif pagina == "👥 Gerenciar Usuários":
+    st.title("👥 Gerenciar Usuários")
+    
+    if not user_is_admin():
+        st.error("❌ Acesso restrito - Apenas administradores podem gerenciar usuários")
+        st.stop()
+    
+    tab1, tab2, tab3 = st.tabs(["➕ Criar Usuário", "✏️ Editar Usuários", "🗑️ Excluir Usuários"])
+    
+    with tab1:
+        st.subheader("➕ Criar Novo Usuário")
+        
+        with st.form("form_criar_usuario"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                novo_username = st.text_input("**Nome de usuário**", placeholder="Digite o nome de usuário")
+                nova_senha = st.text_input("**Senha**", type="password", placeholder="Digite a senha")
+            
+            with col2:
+                confirmar_senha = st.text_input("**Confirmar Senha**", type="password", placeholder="Confirme a senha")
+                permissao = st.selectbox(
+                    "**Permissão**",
+                    options=list(PERMISSOES.keys()),
+                    format_func=lambda x: PERMISSOES[x]
+                )
+            
+            submitted = st.form_submit_button("👤 Criar Usuário", width='stretch')
+            
+            if submitted:
+                if not novo_username or not nova_senha or not confirmar_senha:
+                    st.error("❌ Preencha todos os campos!")
+                elif nova_senha != confirmar_senha:
+                    st.error("❌ As senhas não coincidem!")
+                elif len(nova_senha) < 4:
+                    st.error("❌ A senha deve ter pelo menos 4 caracteres!")
+                else:
+                    success, message = criar_usuario(novo_username, nova_senha, permissao)
+                    if success:
+                        st.success(f"✅ {message}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {message}")
+    
+    with tab2:
+        st.subheader("✏️ Editar Permissões de Usuários")
+        
+        users = get_all_users()
+        if users:
+            st.write("**Usuários cadastrados:**")
+            
+            for i, (username, permissao, created_at) in enumerate(users, 1):
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                
+                with col1:
+                    st.write(f"**{username}**")
+                
+                with col2:
+                    st.write(PERMISSOES.get(permissao, 'Desconhecida'))
+                
+                with col3:
+                    # Evitar que admin edite sua própria permissão
+                    if username != st.session_state.username:
+                        nova_permissao = st.selectbox(
+                            f"Permissão para {username}",
+                            options=list(PERMISSOES.keys()),
+                            index=list(PERMISSOES.keys()).index(permissao),
+                            format_func=lambda x: PERMISSOES[x],
+                            key=f"perm_{username}"
+                        )
+                    else:
+                        st.info("👑 Administrador")
+                        nova_permissao = permissao
+                
+                with col4:
+                    if username != st.session_state.username and nova_permissao != permissao:
+                        if st.button("💾", key=f"save_{username}", width='stretch'):
+                            success, message = update_user_permission(username, nova_permissao)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                
+                st.markdown("---")
+        else:
+            st.info("📭 Nenhum usuário cadastrado.")
+    
+    with tab3:
+        st.subheader("🗑️ Excluir Usuários")
+        
+        users = get_all_users()
+        if users:
+            st.warning("⚠️ **Atenção:** Esta ação não pode ser desfeita!")
+            
+            for i, (username, permissao, created_at) in enumerate(users, 1):
+                if username != st.session_state.username:  # Não permitir excluir a si mesmo
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    
+                    with col1:
+                        st.write(f"**{username}**")
+                    
+                    with col2:
+                        st.write(PERMISSOES.get(permissao, 'Desconhecida'))
+                    
+                    with col3:
+                        if st.button("🗑️ Excluir", key=f"del_{username}", width='stretch'):
+                            if st.checkbox(f"Confirmar exclusão de {username}", key=f"confirm_del_{username}"):
+                                success, message = delete_user(username)
+                                if success:
+                                    st.success(message)
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                    
+                    st.markdown("---")
+            else:
+                st.info("ℹ️ Você não pode excluir seu próprio usuário.")
+        else:
+            st.info("📭 Nenhum usuário para excluir.")
+
+    # Estatísticas de usuários
+    st.markdown("---")
+    st.subheader("📊 Estatísticas de Usuários")
+    
+    users = get_all_users()
+    if users:
+        total_usuarios = len(users)
+        admin_count = sum(1 for user in users if user[1] == 'admin')
+        editor_count = sum(1 for user in users if user[1] == 'editor')
+        visualizador_count = sum(1 for user in users if user[1] == 'visualizador')
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total de Usuários", total_usuarios)
+        with col2:
+            st.metric("Administradores", admin_count)
+        with col3:
+            st.metric("Editores", editor_count)
+        with col4:
+            st.metric("Visualizadores", visualizador_count)
+    else:
+        st.info("Nenhum usuário cadastrado.")
+
+# =============================================================================
 # PÁGINA: CONTAS
 # =============================================================================
 
@@ -1083,7 +1163,7 @@ elif pagina == "📝 Contas":
         
         nova_conta = st.text_input("**Nome da Nova Conta**", placeholder="Ex: Salários, Aluguel, Vendas...")
         
-        if st.button("✅ Adicionar Conta", use_container_width=True) and nova_conta:
+        if st.button("✅ Adicionar Conta", width='stretch') and nova_conta:
             adicionar_conta(nova_conta)
             st.rerun()
     else:
@@ -1139,7 +1219,7 @@ elif pagina == "📥 Lançamentos":
                     saida = st.number_input("**Valor (R$)**", min_value=0.0, step=0.01, format="%.2f")
                     entrada = 0.0
             
-            submitted = st.form_submit_button("💾 Salvar Lançamento", use_container_width=True)
+            submitted = st.form_submit_button("💾 Salvar Lançamento", width='stretch')
             
             if submitted and historico:
                 # Calcular saldo
@@ -1206,7 +1286,7 @@ elif pagina == "📥 Lançamentos":
                     data=csv_data,
                     file_name=f"livro_caixa_{mes_selecionado}_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width='stretch'
                 )
             
             # Apenas usuários com permissão de edição podem gerenciar lançamentos
@@ -1269,7 +1349,7 @@ elif pagina == "📥 Lançamentos":
                                     with col8:
                                         st.write("")  # Espaçamento
                                         st.write("")  # Espaçamento
-                                        submitted_editar = st.form_submit_button("💾 Atualizar", use_container_width=True)
+                                        submitted_editar = st.form_submit_button("💾 Atualizar", width='stretch')
                                     
                                     if submitted_editar and historico_editar:
                                         # Atualizar lançamento no banco
@@ -1280,7 +1360,7 @@ elif pagina == "📥 Lançamentos":
                             
                             with col_del:
                                 st.write("**Excluir:**")
-                                if st.button("🗑️ Excluir", use_container_width=True, type="secondary"):
+                                if st.button("🗑️ Excluir", width='stretch', type="secondary"):
                                     if st.checkbox("✅ Confirmar exclusão"):
                                         if excluir_lancamento(lancamento_id, mes_selecionado):
                                             st.success("✅ Lançamento excluído com sucesso!")
@@ -1313,7 +1393,7 @@ elif pagina == "📥 Lançamentos":
     
     # Botão para limpar lançamentos do mês (apenas editores)
     if user_can_edit():
-        if st.button(f"🗑️ Limpar TODOS os Lançamentos de {mes_selecionado}", use_container_width=True, type="secondary"):
+        if st.button(f"🗑️ Limpar TODOS os Lançamentos de {mes_selecionado}", width='stretch', type="secondary"):
             if st.checkbox("✅ Confirmar exclusão de TODOS os lançamentos"):
                 limpar_lancamentos_mes(mes_selecionado)
                 st.rerun()
@@ -1337,7 +1417,7 @@ elif pagina == "📅 Calendário":
     col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([1, 2, 1, 1])
     
     with col_nav1:
-        if st.button("⏮️ Mês Anterior", use_container_width=True):
+        if st.button("⏮️ Mês Anterior", width='stretch'):
             if st.session_state.calendario_mes == 1:
                 st.session_state.calendario_ano -= 1
                 st.session_state.calendario_mes = 12
@@ -1349,7 +1429,7 @@ elif pagina == "📅 Calendário":
         st.subheader(f"{calendar.month_name[st.session_state.calendario_mes]} de {st.session_state.calendario_ano}")
     
     with col_nav3:
-        if st.button("⏭️ Próximo Mês", use_container_width=True):
+        if st.button("⏭️ Próximo Mês", width='stretch'):
             if st.session_state.calendario_mes == 12:
                 st.session_state.calendario_ano += 1
                 st.session_state.calendario_mes = 1
@@ -1358,7 +1438,7 @@ elif pagina == "📅 Calendário":
             st.rerun()
     
     with col_nav4:
-        if st.button("📅 Hoje", use_container_width=True):
+        if st.button("📅 Hoje", width='stretch'):
             st.session_state.calendario_ano = hoje.year
             st.session_state.calendario_mes = hoje.month
             st.rerun()
@@ -1402,7 +1482,7 @@ elif pagina == "📅 Calendário":
                     )
                     
                     # Adicionar interação para clicar no dia
-                    if st.button(f"Selecionar", key=f"dia_{dia}", use_container_width=True):
+                    if st.button(f"Selecionar", key=f"dia_{dia}", width='stretch'):
                         st.session_state.dia_selecionado = dia
                 else:
                     st.markdown('<div style="padding: 10px; margin: 2px; border-radius: 5px; min-height: 80px;"></div>', unsafe_allow_html=True)
@@ -1431,7 +1511,7 @@ elif pagina == "📅 Calendário":
             
             cor_evento = st.color_picker("**Cor do Evento**", value="#1f77b4")
             
-            submitted = st.form_submit_button("💾 Salvar Evento", use_container_width=True)
+            submitted = st.form_submit_button("💾 Salvar Evento", width='stretch')
             
             if submitted and titulo:
                 if salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
@@ -1475,12 +1555,12 @@ elif pagina == "📅 Calendário":
                         col_edit_ev, col_del_ev = st.columns(2)
                         
                         with col_edit_ev:
-                            if st.button("✏️ Editar", key=f"edit_{evento['id']}", use_container_width=True):
+                            if st.button("✏️ Editar", key=f"edit_{evento['id']}", width='stretch'):
                                 st.session_state.editando_evento = evento['id']
                                 st.rerun()
                         
                         with col_del_ev:
-                            if st.button("🗑️ Excluir", key=f"del_{evento['id']}", use_container_width=True):
+                            if st.button("🗑️ Excluir", key=f"del_{evento['id']}", width='stretch'):
                                 if excluir_evento(evento['id']):
                                     st.rerun()
                     else:
@@ -1530,9 +1610,9 @@ elif pagina == "📅 Calendário":
                 
                 col_salvar, col_cancelar = st.columns(2)
                 with col_salvar:
-                    submitted_edit = st.form_submit_button("💾 Atualizar Evento", use_container_width=True)
+                    submitted_edit = st.form_submit_button("💾 Atualizar Evento", width='stretch')
                 with col_cancelar:
-                    if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                    if st.form_submit_button("❌ Cancelar", width='stretch'):
                         del st.session_state.editando_evento
                         st.rerun()
                 
@@ -1545,7 +1625,7 @@ elif pagina == "📅 Calendário":
                     st.warning("⚠️ Por favor, insira um título para o evento.")
         else:
             st.error("❌ Você não tem permissão para editar este evento.")
-            if st.button("⬅️ Voltar", use_container_width=True):
+            if st.button("⬅️ Voltar", width='stretch'):
                 del st.session_state.editando_evento
                 st.rerun()
 
@@ -1642,7 +1722,7 @@ elif pagina == "💾 Exportar Dados":
                 data=csv_data,
                 file_name=f"livro_caixa_{mes_download}_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv",
-                use_container_width=True
+                width='stretch'
             )
         else:
             st.warning(f"📭 Nenhum dado encontrado para {mes_download}")
@@ -1651,7 +1731,7 @@ elif pagina == "💾 Exportar Dados":
         
         # Exportação completa
         st.subheader("📦 Exportação Completa")
-        if st.button("📦 Exportar Todos os Dados", use_container_width=True):
+        if st.button("📦 Exportar Todos os Dados", width='stretch'):
             with st.spinner("Gerando arquivo ZIP..."):
                 output = exportar_para_csv()
                 
@@ -1661,7 +1741,7 @@ elif pagina == "💾 Exportar Dados":
                         data=output,
                         file_name=f"livro_caixa_completo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
                         mime="application/zip",
-                        use_container_width=True
+                        width='stretch'
                     )
                     st.success("✅ Arquivo ZIP gerado com sucesso!")
                 else:
@@ -1725,48 +1805,3 @@ st.markdown(
     """.format(username=st.session_state.username, date=datetime.now().strftime('%d/%m/%Y %H:%M')),
     unsafe_allow_html=True
 )
-# CORREÇÃO TEMPORÁRIA - Adicione antes do sistema de login
-def corrigir_tabela_usuarios():
-    """Corrige a tabela de usuários se necessário"""
-    conn = get_db_connection()
-    if not conn:
-        return
-    
-    try:
-        cursor = conn.cursor()
-        
-        # Verificar se a tabela existe e tem problemas
-        cursor.execute('''
-            SELECT COLUMN_TYPE 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'permissao'
-        ''')
-        result = cursor.fetchone()
-        
-        if result and 'enum' in result[0].lower():
-            st.info("✅ Tabela de usuários parece estar correta")
-        else:
-            st.warning("🔄 Corrigindo tabela de usuários...")
-            # Recriar tabela se necessário
-            cursor.execute('DROP TABLE IF EXISTS usuarios')
-            cursor.execute('''
-                CREATE TABLE usuarios (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE NOT NULL,
-                    password_hash VARCHAR(255) NOT NULL,
-                    permissao ENUM('admin', 'editor', 'visualizador') NOT NULL DEFAULT 'visualizador',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            conn.commit()
-            st.success("✅ Tabela corrigida!")
-            
-    except Exception as e:
-        st.error(f"Erro ao verificar tabela: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-# Chamar a correção temporária
-if st.session_state.get('logged_in') is None:
-    corrigir_tabela_usuarios()
