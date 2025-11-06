@@ -77,19 +77,20 @@ PERMISSOES = {
 }
 
 # =============================================================================
-# CONEXÃO COM PLANETSCALE
+# CONEXÃO COM PLANETSCALE - CREDENCIAIS FIXAS
 # =============================================================================
 
 def get_db_connection():
     """Cria conexão com o PlanetScale usando PyMySQL"""
     try:
-        # Usando secrets do Streamlit
+        # CREDENCIAIS FIXAS - SEM USAR SECRETS
         connection = pymysql.connect(
-            host=st.secrets["planetscale"]["host"],
-            user=st.secrets["planetscale"]["user"],
-            password=st.secrets["planetscale"]["password"],
-            database=st.secrets["planetscale"]["database"],
-            ssl={'ca': '/etc/ssl/certs/ca-certificates.crt'}  # SSL para PlanetScale
+            host="aws.connect.psdb.cloud",
+            user="obyoj6ohvvgsf8ty0ibf",
+            password="pscale_pw_V5y2sSppg6SJ7lHaH7Uu6ib75lMHNuAnv1Xb4Tcm57O",
+            database="adm_loja",
+            ssl={'ca': '/etc/ssl/certs/ca-certificates.crt'},
+            connect_timeout=10
         )
         return connection
     except Error as e:
@@ -104,6 +105,7 @@ def init_auth_db():
     """Inicializa a tabela de usuários com permissões"""
     conn = get_db_connection()
     if not conn:
+        st.error("❌ Não foi possível conectar ao banco de dados para inicialização.")
         return
     
     try:
@@ -137,10 +139,68 @@ def init_auth_db():
             )
         
         conn.commit()
+        st.success("✅ Banco de autenticação inicializado com sucesso!")
     except Error as e:
-        st.error(f"Erro ao inicializar banco de autenticação: {e}")
+        st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+
+def init_db():
+    """Inicializa as demais tabelas do sistema"""
+    conn = get_db_connection()
+    if not conn:
+        return
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Tabela de lançamentos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lancamentos (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                mes VARCHAR(20) NOT NULL,
+                data DATE NOT NULL,
+                historico TEXT NOT NULL,
+                complemento TEXT,
+                entrada DECIMAL(15,2) DEFAULT 0.00,
+                saida DECIMAL(15,2) DEFAULT 0.00,
+                saldo DECIMAL(15,2) DEFAULT 0.00,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Tabela de contas
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS contas (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nome VARCHAR(100) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Tabela de eventos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS eventos_calendario (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                titulo VARCHAR(200) NOT NULL,
+                descricao TEXT,
+                data_evento DATE NOT NULL,
+                hora_evento TIME,
+                tipo_evento VARCHAR(50),
+                cor_evento VARCHAR(20),
+                created_by VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        conn.commit()
+        st.success("✅ Tabelas do sistema inicializadas com sucesso!")
+    except Error as e:
+        st.error(f"❌ Erro ao criar tabelas: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def verify_password(password, password_hash):
     """Verifica se a senha está correta"""
@@ -167,7 +227,8 @@ def login_user(username, password):
         st.error(f"Erro no login: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def logout_user():
     """Faz logout do usuário"""
@@ -194,7 +255,8 @@ def change_password(username, new_password):
         st.error(f"Erro ao alterar senha: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def create_user(username, password, permissao='visualizador'):
     """Cria um novo usuário"""
@@ -216,7 +278,8 @@ def create_user(username, password, permissao='visualizador'):
             return False  # Usuário já existe
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def get_all_users():
     """Busca todos os usuários (apenas para admin)"""
@@ -233,7 +296,8 @@ def get_all_users():
         st.error(f"Erro ao buscar usuários: {e}")
         return []
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def update_user_permission(username, permissao):
     """Atualiza a permissão de um usuário"""
@@ -252,7 +316,8 @@ def update_user_permission(username, permissao):
     except Error as e:
         return False, f"Erro ao atualizar permissão: {e}"
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def delete_user(username):
     """Exclui um usuário (apenas para admin)"""
@@ -272,7 +337,8 @@ def delete_user(username):
     except Error as e:
         return False, f"Erro ao excluir usuário: {e}"
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 # Função para verificar permissões
 def user_can_edit():
@@ -286,11 +352,6 @@ def user_is_admin():
 # =============================================================================
 # FUNÇÕES DO BANCO DE DADOS PRINCIPAL
 # =============================================================================
-
-def init_db():
-    """Inicializa as tabelas no PlanetScale"""
-    # As tabelas já devem estar criadas via interface do PlanetScale
-    pass
 
 def get_lancamentos_mes(mes):
     """Busca lançamentos de um mês específico"""
@@ -306,7 +367,8 @@ def get_lancamentos_mes(mes):
         st.error(f"Erro ao buscar lançamentos: {e}")
         return pd.DataFrame()
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def salvar_lancamento(mes, data, historico, complemento, entrada, saida, saldo):
     """Salva um novo lançamento no banco"""
@@ -327,7 +389,8 @@ def salvar_lancamento(mes, data, historico, complemento, entrada, saida, saldo):
         st.error(f"❌ Erro ao salvar lançamento: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def atualizar_lancamento(lancamento_id, mes, data, historico, complemento, entrada, saida):
     """Atualiza um lançamento existente no banco"""
@@ -387,7 +450,8 @@ def atualizar_lancamento(lancamento_id, mes, data, historico, complemento, entra
         st.error(f"❌ Erro ao atualizar lançamento: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def excluir_lancamento(lancamento_id, mes):
     """Exclui um lançamento específico"""
@@ -429,7 +493,8 @@ def excluir_lancamento(lancamento_id, mes):
         st.error(f"❌ Erro ao excluir lançamento: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def limpar_lancamentos_mes(mes):
     """Remove todos os lançamentos de um mês"""
@@ -445,7 +510,8 @@ def limpar_lancamentos_mes(mes):
     except Error as e:
         st.error(f"❌ Erro ao limpar lançamentos: {e}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def get_contas():
     """Busca todas as contas"""
@@ -461,7 +527,8 @@ def get_contas():
         st.error(f"Erro ao buscar contas: {e}")
         return []
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def adicionar_conta(nome_conta):
     """Adiciona uma nova conta"""
@@ -479,7 +546,8 @@ def adicionar_conta(nome_conta):
         st.error(f"❌ Erro ao adicionar conta: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 # =============================================================================
 # FUNÇÕES DO CALENDÁRIO
@@ -507,7 +575,8 @@ def salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_
         st.error(f"❌ Erro ao salvar evento: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
     """Atualiza um evento existente"""
@@ -532,7 +601,8 @@ def atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tip
         st.error(f"❌ Erro ao atualizar evento: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def get_eventos_mes(ano, mes):
     """Busca eventos de um mês específico"""
@@ -557,7 +627,8 @@ def get_eventos_mes(ano, mes):
         st.error(f"Erro ao buscar eventos: {e}")
         return pd.DataFrame()
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def get_eventos_data(data_especifica):
     """Busca eventos de uma data específica"""
@@ -577,7 +648,8 @@ def get_eventos_data(data_especifica):
         st.error(f"Erro ao buscar eventos: {e}")
         return pd.DataFrame()
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def excluir_evento(evento_id):
     """Exclui um evento"""
@@ -595,7 +667,8 @@ def excluir_evento(evento_id):
         st.error(f"❌ Erro ao excluir evento: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def gerar_calendario(ano, mes):
     """Gera uma matriz do calendário para o mês/ano especificado"""
@@ -706,7 +779,8 @@ def exportar_para_csv():
             except:
                 pass
             finally:
-                conn.close()
+                if conn:
+                    conn.close()
         
         # Criar um arquivo ZIP com todos os CSVs
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -797,10 +871,6 @@ def carregar_imagem_logo(caminho_imagem="Logo_Loja.png"):
 # INICIALIZAÇÃO DO SISTEMA
 # =============================================================================
 
-# Inicializar bancos de dados
-init_db()
-init_auth_db()
-
 # Verificar se o usuário está logado
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
@@ -813,6 +883,21 @@ if 'logged_in' not in st.session_state:
 
 if not st.session_state.logged_in:
     st.title("🔐 Login - Livro Caixa")
+    
+    # Testar conexão com o banco
+    conn = get_db_connection()
+    if conn:
+        st.success("✅ Conectado ao banco de dados PlanetScale!")
+        conn.close()
+        
+        # Inicializar bancos apenas se a conexão estiver OK
+        try:
+            init_db()
+            init_auth_db()
+        except Exception as e:
+            st.error(f"❌ Erro na inicialização: {e}")
+    else:
+        st.error("❌ Não foi possível conectar ao banco de dados")
     
     col1, col2 = st.columns([1, 2])
     
