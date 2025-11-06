@@ -1,4 +1,4 @@
-# app.py - VERSÃO COMPLETA CORRIGIDA
+# app.py - SISTEMA COMPLETO LIVRO CAIXA
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -32,7 +32,7 @@ PERMISSOES = {
 }
 
 # =============================================================================
-# FUNÇÃO PARA CARREGAR IMAGEM DO LOGO (CORRIGIDA)
+# FUNÇÃO PARA CARREGAR IMAGEM DO LOGO
 # =============================================================================
 
 def carregar_imagem_logo(nome_arquivo):
@@ -200,6 +200,45 @@ def user_can_edit():
     """Verifica se usuário pode editar (admin ou editor)"""
     return st.session_state.permissao in ['admin', 'editor']
 
+# =============================================================================
+# FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS
+# =============================================================================
+
+def criar_usuario(username, password, permissao):
+    """Cria um novo usuário no sistema"""
+    if not user_is_admin():
+        return False, "Apenas administradores podem criar usuários"
+    
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão com o banco"
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Verificar se usuário já existe
+        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = %s', (username,))
+        if cursor.fetchone()[0] > 0:
+            return False, "Usuário já existe"
+        
+        # Criar hash da senha
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        # Inserir novo usuário
+        cursor.execute(
+            'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)',
+            (username, password_hash, permissao)
+        )
+        
+        conn.commit()
+        return True, f"Usuário '{username}' criado com sucesso!"
+        
+    except Error as e:
+        return False, f"Erro ao criar usuário: {e}"
+    finally:
+        if conn:
+            conn.close()
+
 def get_all_users():
     """Busca todos os usuários (apenas admin)"""
     if not user_is_admin():
@@ -246,6 +285,9 @@ def delete_user(username):
     """Exclui usuário"""
     if not user_is_admin():
         return False, "Apenas administradores podem excluir usuários"
+    
+    if username == st.session_state.username:
+        return False, "Você não pode excluir seu próprio usuário"
     
     conn = get_db_connection()
     if not conn:
@@ -680,16 +722,21 @@ def pagina_configuracao():
     with st.expander("📋 Passos para configurar:", expanded=True):
         st.markdown("""
         1. **Acesse** [share.streamlit.io](https://share.streamlit.io)
-        2. **Vá no seu app** → **Clique em 'Manage app'**
-        3. **Vá em Settings** → **Secrets**
+        2. **Vá no seu app** → **Clique em 'Settings' (⚙️)**
+        3. **Vá na aba "Secrets"**
         4. **Cole este conteúdo EXATAMENTE:**
-        ```toml
-        [planetscale]
-        host = "aws.connect.psdb.cloud"
-        user = "obyoj6ohvvgsf8ty0ibf"
-        password = "pscale_pw_V5y2sSppg6SJ7lHaH7Uu6ib75lMHNuAnv1Xb4Tcm57O"
-        database = "adm_loja"
-        ```
+        """)
+        
+        # SUAS CREDENCIAIS REAIS
+        secrets_content = '''[planetscale]
+host = "aws.connect.psdb.cloud"
+user = "swyqb2mjfdr8mp6n9xap"
+password = "pscale_pw_a1DZV8LeMzT4QmtBVzuPu4QDc4B4klcxUaplE0wKI6c"
+database = "adm_loja"'''
+        
+        st.code(secrets_content, language='toml')
+        
+        st.markdown("""
         5. **Clique em Save**
         6. **Aguarde o app reiniciar automaticamente**
         """)
@@ -704,16 +751,33 @@ def pagina_configuracao():
             st.success("✅ Secrets encontrados!")
             st.write("**Configuração atual:**")
             for key, value in secrets.items():
-                st.write(f"- **{key}:** `{value}`")
+                if key == "password":
+                    st.write(f"- **{key}:** `{value[:10]}...`")
+                else:
+                    st.write(f"- **{key}:** `{value}`")
             
             # Testar conexão
             if st.button("🔗 Testar Conexão"):
                 conn = get_db_connection()
                 if conn:
                     st.success("🎉 Conexão bem-sucedida! O sistema está funcionando.")
-                    conn.close()
+                    
+                    # Mostrar tabelas existentes
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute("SHOW TABLES")
+                        tables = cursor.fetchall()
+                        
+                        st.write("**Tabelas no banco:**")
+                        for table in tables:
+                            st.write(f"- `{table[0]}`")
+                            
+                    except Exception as e:
+                        st.error(f"Erro ao listar tabelas: {e}")
+                    finally:
+                        conn.close()
         else:
-            st.error("❌ Nenhum secret encontrado.")
+            st.error("❌ Nenhum secret 'planetscale' encontrado.")
 
 # =============================================================================
 # VERIFICAÇÃO INICIAL
@@ -724,8 +788,14 @@ if "planetscale" not in st.secrets:
     pagina_configuracao()
     st.stop()
 
-# Se chegou aqui, os secrets existem - continuar com o app normal
-st.success("✅ Secrets configurados! Inicializando sistema...")
+# Se chegou aqui, os secrets existem - testar conexão
+conn = get_db_connection()
+if not conn:
+    st.error("❌ Falha na conexão. Verifique as configurações.")
+    pagina_configuracao()
+    st.stop()
+else:
+    conn.close()
 
 # =============================================================================
 # INICIALIZAÇÃO DO SISTEMA
@@ -737,20 +807,9 @@ if 'logged_in' not in st.session_state:
     st.session_state.username = None
     st.session_state.permissao = None
 
-# Testar conexão e inicializar bancos
-conn = get_db_connection()
-if conn:
-    st.success("✅ Conectado ao banco de dados!")
-    conn.close()
-    
-    # Inicializar bancos
-    try:
-        init_db()
-        init_auth_db()
-    except Exception as e:
-        st.error(f"❌ Erro na inicialização: {e}")
-else:
-    st.error("❌ Falha na conexão com o banco")
+# Inicializar bancos de dados
+init_db()
+init_auth_db()
 
 # =============================================================================
 # PÁGINA DE LOGIN
@@ -832,73 +891,22 @@ with st.sidebar:
                 else:
                     st.warning("⚠️ Preencha todos os campos!")
     
-    # Gerenciar usuários (apenas para admin)
-    if user_is_admin():
-        with st.sidebar.expander("👥 Gerenciar Usuários"):
-            st.subheader("Usuários do Sistema")
-            
-            # Listar usuários existentes
-            users = get_all_users()
-            if users:
-                st.write("**Usuários cadastrados:**")
-                for i, (username, permissao, created_at) in enumerate(users, 1):
-                    st.write(f"{i}. **{username}** - {PERMISSOES.get(permissao, 'Desconhecida')} - Criado em: {created_at}")
-                
-                st.markdown("---")
-                
-                # Editar permissões de usuário
-                st.subheader("Editar Permissões")
-                user_to_edit = st.selectbox(
-                    "Selecione o usuário para editar:",
-                    [user[0] for user in users if user[0] != 'admin']  # Não permitir editar admin
-                )
-                
-                if user_to_edit:
-                    # Buscar permissão atual do usuário
-                    permissao_atual = next((user[1] for user in users if user[0] == user_to_edit), 'visualizador')
-                    
-                    nova_permissao = st.selectbox(
-                        "Nova permissão:",
-                        options=list(PERMISSOES.keys()),
-                        index=list(PERMISSOES.keys()).index(permissao_atual),
-                        format_func=lambda x: PERMISSOES[x]
-                    )
-                    
-                    if st.button("💾 Atualizar Permissão", use_container_width=True):
-                        if nova_permissao != permissao_atual:
-                            success, message = update_user_permission(user_to_edit, nova_permissao)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-                
-                st.markdown("---")
-                
-                # Excluir usuário
-                st.subheader("Excluir Usuário")
-                user_to_delete = st.selectbox(
-                    "Selecione o usuário para excluir:",
-                    [user[0] for user in users if user[0] != st.session_state.username]
-                )
-                
-                if user_to_delete:
-                    if st.button("🗑️ Excluir Usuário", use_container_width=True):
-                        if st.checkbox("✅ Confirmar exclusão do usuário"):
-                            success, message = delete_user(user_to_delete)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-            else:
-                st.info("Nenhum usuário cadastrado.")
-    
     st.markdown("---")
+    
+    # Menu de navegação ATUALIZADO
+    opcoes_menu = [
+        "📋 Ajuda", 
+        "👥 Gerenciar Usuários",  # NOVA OPÇÃO
+        "📝 Contas", 
+        "📥 Lançamentos", 
+        "📅 Calendário", 
+        "📈 Balanço Financeiro", 
+        "💾 Exportar Dados"
+    ]
     
     pagina = st.radio(
         "**Navegação:**",
-        ["Ajuda", "Contas", "Lançamentos", "Calendário", "Balanço Financeiro", "Exportar Dados"],
+        opcoes_menu,
         label_visibility="collapsed"
     )
 
@@ -906,7 +914,7 @@ with st.sidebar:
 # PÁGINA: AJUDA
 # =============================================================================
 
-if pagina == "Ajuda":
+if pagina == "📋 Ajuda":
     st.title("📋 Ajuda - Livro Caixa")
     
     col1, col2 = st.columns([2, 1])
@@ -981,10 +989,159 @@ if pagina == "Ajuda":
         """)
 
 # =============================================================================
+# PÁGINA: GERENCIAR USUÁRIOS
+# =============================================================================
+
+elif pagina == "👥 Gerenciar Usuários":
+    st.title("👥 Gerenciar Usuários")
+    
+    if not user_is_admin():
+        st.error("❌ Acesso restrito - Apenas administradores podem gerenciar usuários")
+        st.stop()
+    
+    tab1, tab2, tab3 = st.tabs(["➕ Criar Usuário", "✏️ Editar Usuários", "🗑️ Excluir Usuários"])
+    
+    with tab1:
+        st.subheader("➕ Criar Novo Usuário")
+        
+        with st.form("form_criar_usuario"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                novo_username = st.text_input("**Nome de usuário**", placeholder="Digite o nome de usuário")
+                nova_senha = st.text_input("**Senha**", type="password", placeholder="Digite a senha")
+            
+            with col2:
+                confirmar_senha = st.text_input("**Confirmar Senha**", type="password", placeholder="Confirme a senha")
+                permissao = st.selectbox(
+                    "**Permissão**",
+                    options=list(PERMISSOES.keys()),
+                    format_func=lambda x: PERMISSOES[x]
+                )
+            
+            submitted = st.form_submit_button("👤 Criar Usuário", use_container_width=True)
+            
+            if submitted:
+                if not novo_username or not nova_senha or not confirmar_senha:
+                    st.error("❌ Preencha todos os campos!")
+                elif nova_senha != confirmar_senha:
+                    st.error("❌ As senhas não coincidem!")
+                elif len(nova_senha) < 4:
+                    st.error("❌ A senha deve ter pelo menos 4 caracteres!")
+                else:
+                    success, message = criar_usuario(novo_username, nova_senha, permissao)
+                    if success:
+                        st.success(f"✅ {message}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {message}")
+    
+    with tab2:
+        st.subheader("✏️ Editar Permissões de Usuários")
+        
+        users = get_all_users()
+        if users:
+            st.write("**Usuários cadastrados:**")
+            
+            for i, (username, permissao, created_at) in enumerate(users, 1):
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                
+                with col1:
+                    st.write(f"**{username}**")
+                
+                with col2:
+                    st.write(PERMISSOES.get(permissao, 'Desconhecida'))
+                
+                with col3:
+                    # Evitar que admin edite sua própria permissão
+                    if username != st.session_state.username:
+                        nova_permissao = st.selectbox(
+                            f"Permissão para {username}",
+                            options=list(PERMISSOES.keys()),
+                            index=list(PERMISSOES.keys()).index(permissao),
+                            format_func=lambda x: PERMISSOES[x],
+                            key=f"perm_{username}"
+                        )
+                    else:
+                        st.info("👑 Administrador")
+                        nova_permissao = permissao
+                
+                with col4:
+                    if username != st.session_state.username and nova_permissao != permissao:
+                        if st.button("💾", key=f"save_{username}", use_container_width=True):
+                            success, message = update_user_permission(username, nova_permissao)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                
+                st.markdown("---")
+        else:
+            st.info("📭 Nenhum usuário cadastrado.")
+    
+    with tab3:
+        st.subheader("🗑️ Excluir Usuários")
+        
+        users = get_all_users()
+        if users:
+            st.warning("⚠️ **Atenção:** Esta ação não pode ser desfeita!")
+            
+            for i, (username, permissao, created_at) in enumerate(users, 1):
+                if username != st.session_state.username:  # Não permitir excluir a si mesmo
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    
+                    with col1:
+                        st.write(f"**{username}**")
+                    
+                    with col2:
+                        st.write(PERMISSOES.get(permissao, 'Desconhecida'))
+                    
+                    with col3:
+                        if st.button("🗑️ Excluir", key=f"del_{username}", use_container_width=True):
+                            if st.checkbox(f"Confirmar exclusão de {username}", key=f"confirm_del_{username}"):
+                                success, message = delete_user(username)
+                                if success:
+                                    st.success(message)
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                    
+                    st.markdown("---")
+            else:
+                st.info("ℹ️ Você não pode excluir seu próprio usuário.")
+        else:
+            st.info("📭 Nenhum usuário para excluir.")
+
+    # Estatísticas de usuários
+    st.markdown("---")
+    st.subheader("📊 Estatísticas de Usuários")
+    
+    users = get_all_users()
+    if users:
+        total_usuarios = len(users)
+        admin_count = sum(1 for user in users if user[1] == 'admin')
+        editor_count = sum(1 for user in users if user[1] == 'editor')
+        visualizador_count = sum(1 for user in users if user[1] == 'visualizador')
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total de Usuários", total_usuarios)
+        with col2:
+            st.metric("Administradores", admin_count)
+        with col3:
+            st.metric("Editores", editor_count)
+        with col4:
+            st.metric("Visualizadores", visualizador_count)
+    else:
+        st.info("Nenhum usuário cadastrado.")
+
+# =============================================================================
 # PÁGINA: CONTAS
 # =============================================================================
 
-elif pagina == "Contas":
+elif pagina == "📝 Contas":
     st.title("📝 Contas")
     
     # Buscar contas do banco
@@ -1013,7 +1170,7 @@ elif pagina == "Contas":
 # PÁGINA: LANÇAMENTOS
 # =============================================================================
 
-elif pagina == "Lançamentos":
+elif pagina == "📥 Lançamentos":
     st.title("📥 Lançamentos do Caixa")
     
     meses = [
@@ -1242,7 +1399,7 @@ elif pagina == "Lançamentos":
 # PÁGINA: CALENDÁRIO
 # =============================================================================
 
-elif pagina == "Calendário":
+elif pagina == "📅 Calendário":
     st.title("📅 Calendário Programável")
     
     # Configurações iniciais
@@ -1473,7 +1630,7 @@ elif pagina == "Calendário":
 # PÁGINA: BALANÇO FINANCEIRO
 # =============================================================================
 
-elif pagina == "Balanço Financeiro":
+elif pagina == "📈 Balanço Financeiro":
     st.title("📈 Balanço Financeiro")
     
     # Calcular totais anuais
@@ -1538,7 +1695,7 @@ elif pagina == "Balanço Financeiro":
 # PÁGINA: EXPORTAR DADOS
 # =============================================================================
 
-elif pagina == "Exportar Dados":
+elif pagina == "💾 Exportar Dados":
     st.title("💾 Exportar Dados")
     
     col1, col2 = st.columns(2)
