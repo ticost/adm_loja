@@ -1,4 +1,4 @@
-# app.py - SISTEMA COMPLETO LIVRO CAIXA CORRIGIDO
+# app.py - SISTEMA COMPLETO LIVRO CAIXA
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
@@ -32,7 +32,7 @@ PERMISSOES = {
 }
 
 # =============================================================================
-# FUNÇÃO PARA CARREGAR IMAGEM DO LOGO - CORRIGIDA
+# FUNÇÃO PARA CARREGAR IMAGEM DO LOGO
 # =============================================================================
 
 def carregar_imagem_logo(nome_arquivo):
@@ -50,7 +50,7 @@ def carregar_imagem_logo(nome_arquivo):
         
         for caminho in caminhos_tentativos:
             if os.path.exists(caminho):
-                st.sidebar.image(caminho, use_container_width=True)  # CORRIGIDO: use_container_width
+                st.sidebar.image(caminho, use_column_width=True)
                 return True
         
         # Se não encontrou, mostra placeholder
@@ -117,48 +117,111 @@ def get_db_connection():
 # FUNÇÕES DE AUTENTICAÇÃO
 # =============================================================================
 
-def init_auth_db():
-    """Inicializa a tabela de usuários com permissões"""
-    conn = get_db_connection()
-    if not conn:
+# reset_db.py - APENAS PARA RESET EMERGENCIAL
+import streamlit as st
+import pymysql
+import hashlib
+
+def reset_database():
+    st.title("🔄 Reset Emergencial do Banco")
+    
+    if "planetscale" not in st.secrets:
+        st.error("❌ Secrets não encontrados")
         return
     
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                permissao ENUM('admin', 'editor', 'visualizador') DEFAULT 'visualizador',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Inserir usuários padrão se não existirem
-        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = "admin"')
-        if cursor.fetchone()[0] == 0:
-            # Senha padrão: "admin123"
-            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute(
-                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
-                ('admin', password_hash, 'admin')
-            )
-            
-            # Usuário visualizador padrão
-            password_hash_viewer = hashlib.sha256('visual123'.encode()).hexdigest()
-            cursor.execute(
-                'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
-                ('visual', password_hash_viewer, 'visualizador')
-            )
-        
-        conn.commit()
-    except Error as e:
-        st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
-    finally:
-        if conn:
-            conn.close()
+    if st.button("🚨 RESETAR BANCO COMPLETO", type="secondary"):
+        if st.checkbox("✅ CONFIRMAR: Esta ação apagará TODOS os dados!"):
+            try:
+                conn = pymysql.connect(
+                    host=st.secrets["planetscale"]["host"],
+                    user=st.secrets["planetscale"]["user"],
+                    password=st.secrets["planetscale"]["password"],
+                    database=st.secrets["planetscale"]["database"],
+                    ssl={'ca': '/etc/ssl/certs/ca-certificates.crt'}
+                )
+                
+                cursor = conn.cursor()
+                
+                # Remover tabelas
+                cursor.execute('DROP TABLE IF EXISTS eventos_calendario')
+                cursor.execute('DROP TABLE IF EXISTS lancamentos')
+                cursor.execute('DROP TABLE IF EXISTS contas')
+                cursor.execute('DROP TABLE IF EXISTS usuarios')
+                
+                # Recriar tabelas corretamente
+                # Tabela de usuários
+                cursor.execute('''
+                    CREATE TABLE usuarios (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        username VARCHAR(50) UNIQUE NOT NULL,
+                        password_hash VARCHAR(255) NOT NULL,
+                        permissao ENUM('admin', 'editor', 'visualizador') NOT NULL DEFAULT 'visualizador',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Tabela de contas
+                cursor.execute('''
+                    CREATE TABLE contas (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        nome VARCHAR(100) UNIQUE NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Tabela de lançamentos
+                cursor.execute('''
+                    CREATE TABLE lancamentos (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        mes VARCHAR(20) NOT NULL,
+                        data DATE NOT NULL,
+                        historico TEXT NOT NULL,
+                        complemento TEXT,
+                        entrada DECIMAL(15,2) DEFAULT 0.00,
+                        saida DECIMAL(15,2) DEFAULT 0.00,
+                        saldo DECIMAL(15,2) DEFAULT 0.00,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Tabela de eventos
+                cursor.execute('''
+                    CREATE TABLE eventos_calendario (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        titulo VARCHAR(200) NOT NULL,
+                        descricao TEXT,
+                        data_evento DATE NOT NULL,
+                        hora_evento TIME,
+                        tipo_evento VARCHAR(50),
+                        cor_evento VARCHAR(20),
+                        created_by VARCHAR(50),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Inserir usuários padrão
+                password_hash_admin = hashlib.sha256('admin123'.encode()).hexdigest()
+                cursor.execute(
+                    'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
+                    ('admin', password_hash_admin, 'admin')
+                )
+                
+                password_hash_visual = hashlib.sha256('visual123'.encode()).hexdigest()
+                cursor.execute(
+                    'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)', 
+                    ('visual', password_hash_visual, 'visualizador')
+                )
+                
+                conn.commit()
+                conn.close()
+                
+                st.success("🎉 Banco resetado com sucesso!")
+                st.info("👤 Usuários criados: admin/admin123 e visual/visual123")
+                
+            except Exception as e:
+                st.error(f"❌ Erro no reset: {e}")
+
+reset_database()
 
 def login_user(username, password):
     """Autentica usuário"""
@@ -199,45 +262,6 @@ def user_is_admin():
 def user_can_edit():
     """Verifica se usuário pode editar (admin ou editor)"""
     return st.session_state.permissao in ['admin', 'editor']
-
-# =============================================================================
-# FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS
-# =============================================================================
-
-def criar_usuario(username, password, permissao):
-    """Cria um novo usuário no sistema"""
-    if not user_is_admin():
-        return False, "Apenas administradores podem criar usuários"
-    
-    conn = get_db_connection()
-    if not conn:
-        return False, "Erro de conexão com o banco"
-    
-    try:
-        cursor = conn.cursor()
-        
-        # Verificar se usuário já existe
-        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = %s', (username,))
-        if cursor.fetchone()[0] > 0:
-            return False, "Usuário já existe"
-        
-        # Criar hash da senha
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        
-        # Inserir novo usuário
-        cursor.execute(
-            'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)',
-            (username, password_hash, permissao)
-        )
-        
-        conn.commit()
-        return True, f"Usuário '{username}' criado com sucesso!"
-        
-    except Error as e:
-        return False, f"Erro ao criar usuário: {e}"
-    finally:
-        if conn:
-            conn.close()
 
 def get_all_users():
     """Busca todos os usuários (apenas admin)"""
@@ -285,9 +309,6 @@ def delete_user(username):
     """Exclui usuário"""
     if not user_is_admin():
         return False, "Apenas administradores podem excluir usuários"
-    
-    if username == st.session_state.username:
-        return False, "Você não pode excluir seu próprio usuário"
     
     conn = get_db_connection()
     if not conn:
@@ -429,8 +450,7 @@ def get_lancamentos_mes(mes):
         query = 'SELECT * FROM lancamentos WHERE mes = %s ORDER BY data, id'
         df = pd.read_sql(query, conn, params=[mes])
         return df
-    except Exception as e:
-        st.error(f"Erro ao buscar lançamentos: {e}")
+    except Error:
         return pd.DataFrame()
     finally:
         if conn:
@@ -581,8 +601,7 @@ def get_eventos_mes(ano, mes):
         '''
         df = pd.read_sql(query, conn, params=[data_inicio, data_fim])
         return df
-    except Exception as e:
-        st.error(f"Erro ao buscar eventos: {e}")
+    except Error:
         return pd.DataFrame()
     finally:
         if conn:
@@ -859,7 +878,7 @@ if not st.session_state.logged_in:
 
 # Sidebar com logo e informações do usuário
 with st.sidebar:
-    # Carrega a imagem do logo - CORRIGIDO: função agora está definida
+    # Carrega a imagem do logo
     logo_carregado = carregar_imagem_logo("Logo_Loja.png")
     
     st.title("📒 Livro Caixa")
@@ -893,22 +912,73 @@ with st.sidebar:
                 else:
                     st.warning("⚠️ Preencha todos os campos!")
     
-    st.markdown("---")
+    # Gerenciar usuários (apenas para admin)
+    if user_is_admin():
+        with st.sidebar.expander("👥 Gerenciar Usuários"):
+            st.subheader("Usuários do Sistema")
+            
+            # Listar usuários existentes
+            users = get_all_users()
+            if users:
+                st.write("**Usuários cadastrados:**")
+                for i, (username, permissao, created_at) in enumerate(users, 1):
+                    st.write(f"{i}. **{username}** - {PERMISSOES.get(permissao, 'Desconhecida')} - Criado em: {created_at}")
+                
+                st.markdown("---")
+                
+                # Editar permissões de usuário
+                st.subheader("Editar Permissões")
+                user_to_edit = st.selectbox(
+                    "Selecione o usuário para editar:",
+                    [user[0] for user in users if user[0] != 'admin']  # Não permitir editar admin
+                )
+                
+                if user_to_edit:
+                    # Buscar permissão atual do usuário
+                    permissao_atual = next((user[1] for user in users if user[0] == user_to_edit), 'visualizador')
+                    
+                    nova_permissao = st.selectbox(
+                        "Nova permissão:",
+                        options=list(PERMISSOES.keys()),
+                        index=list(PERMISSOES.keys()).index(permissao_atual),
+                        format_func=lambda x: PERMISSOES[x]
+                    )
+                    
+                    if st.button("💾 Atualizar Permissão", use_container_width=True):
+                        if nova_permissao != permissao_atual:
+                            success, message = update_user_permission(user_to_edit, nova_permissao)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                
+                st.markdown("---")
+                
+                # Excluir usuário
+                st.subheader("Excluir Usuário")
+                user_to_delete = st.selectbox(
+                    "Selecione o usuário para excluir:",
+                    [user[0] for user in users if user[0] != st.session_state.username]
+                )
+                
+                if user_to_delete:
+                    if st.button("🗑️ Excluir Usuário", use_container_width=True):
+                        if st.checkbox("✅ Confirmar exclusão do usuário"):
+                            success, message = delete_user(user_to_delete)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+            else:
+                st.info("Nenhum usuário cadastrado.")
     
-    # Menu de navegação ATUALIZADO
-    opcoes_menu = [
-        "📋 Ajuda", 
-        "👥 Gerenciar Usuários",  # NOVA OPÇÃO
-        "📝 Contas", 
-        "📥 Lançamentos", 
-        "📅 Calendário", 
-        "📈 Balanço Financeiro", 
-        "💾 Exportar Dados"
-    ]
+    st.markdown("---")
     
     pagina = st.radio(
         "**Navegação:**",
-        opcoes_menu,
+        ["📋 Ajuda", "📝 Contas", "📥 Lançamentos", "📅 Calendário", "📈 Balanço Financeiro", "💾 Exportar Dados"],
         label_visibility="collapsed"
     )
 
@@ -989,155 +1059,6 @@ if pagina == "📋 Ajuda":
         - **✏️ Editor**: Pode adicionar, editar e excluir lançamentos e contas
         - **👀 Visualizador**: Apenas visualização de dados e relatórios
         """)
-
-# =============================================================================
-# PÁGINA: GERENCIAR USUÁRIOS
-# =============================================================================
-
-elif pagina == "👥 Gerenciar Usuários":
-    st.title("👥 Gerenciar Usuários")
-    
-    if not user_is_admin():
-        st.error("❌ Acesso restrito - Apenas administradores podem gerenciar usuários")
-        st.stop()
-    
-    tab1, tab2, tab3 = st.tabs(["➕ Criar Usuário", "✏️ Editar Usuários", "🗑️ Excluir Usuários"])
-    
-    with tab1:
-        st.subheader("➕ Criar Novo Usuário")
-        
-        with st.form("form_criar_usuario"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                novo_username = st.text_input("**Nome de usuário**", placeholder="Digite o nome de usuário")
-                nova_senha = st.text_input("**Senha**", type="password", placeholder="Digite a senha")
-            
-            with col2:
-                confirmar_senha = st.text_input("**Confirmar Senha**", type="password", placeholder="Confirme a senha")
-                permissao = st.selectbox(
-                    "**Permissão**",
-                    options=list(PERMISSOES.keys()),
-                    format_func=lambda x: PERMISSOES[x]
-                )
-            
-            submitted = st.form_submit_button("👤 Criar Usuário", use_container_width=True)
-            
-            if submitted:
-                if not novo_username or not nova_senha or not confirmar_senha:
-                    st.error("❌ Preencha todos os campos!")
-                elif nova_senha != confirmar_senha:
-                    st.error("❌ As senhas não coincidem!")
-                elif len(nova_senha) < 4:
-                    st.error("❌ A senha deve ter pelo menos 4 caracteres!")
-                else:
-                    success, message = criar_usuario(novo_username, nova_senha, permissao)
-                    if success:
-                        st.success(f"✅ {message}")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {message}")
-    
-    with tab2:
-        st.subheader("✏️ Editar Permissões de Usuários")
-        
-        users = get_all_users()
-        if users:
-            st.write("**Usuários cadastrados:**")
-            
-            for i, (username, permissao, created_at) in enumerate(users, 1):
-                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-                
-                with col1:
-                    st.write(f"**{username}**")
-                
-                with col2:
-                    st.write(PERMISSOES.get(permissao, 'Desconhecida'))
-                
-                with col3:
-                    # Evitar que admin edite sua própria permissão
-                    if username != st.session_state.username:
-                        nova_permissao = st.selectbox(
-                            f"Permissão para {username}",
-                            options=list(PERMISSOES.keys()),
-                            index=list(PERMISSOES.keys()).index(permissao),
-                            format_func=lambda x: PERMISSOES[x],
-                            key=f"perm_{username}"
-                        )
-                    else:
-                        st.info("👑 Administrador")
-                        nova_permissao = permissao
-                
-                with col4:
-                    if username != st.session_state.username and nova_permissao != permissao:
-                        if st.button("💾", key=f"save_{username}", use_container_width=True):
-                            success, message = update_user_permission(username, nova_permissao)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-                
-                st.markdown("---")
-        else:
-            st.info("📭 Nenhum usuário cadastrado.")
-    
-    with tab3:
-        st.subheader("🗑️ Excluir Usuários")
-        
-        users = get_all_users()
-        if users:
-            st.warning("⚠️ **Atenção:** Esta ação não pode ser desfeita!")
-            
-            for i, (username, permissao, created_at) in enumerate(users, 1):
-                if username != st.session_state.username:  # Não permitir excluir a si mesmo
-                    col1, col2, col3 = st.columns([3, 2, 1])
-                    
-                    with col1:
-                        st.write(f"**{username}**")
-                    
-                    with col2:
-                        st.write(PERMISSOES.get(permissao, 'Desconhecida'))
-                    
-                    with col3:
-                        if st.button("🗑️ Excluir", key=f"del_{username}", use_container_width=True):
-                            if st.checkbox(f"Confirmar exclusão de {username}", key=f"confirm_del_{username}"):
-                                success, message = delete_user(username)
-                                if success:
-                                    st.success(message)
-                                    st.rerun()
-                                else:
-                                    st.error(message)
-                    
-                    st.markdown("---")
-            else:
-                st.info("ℹ️ Você não pode excluir seu próprio usuário.")
-        else:
-            st.info("📭 Nenhum usuário para excluir.")
-
-    # Estatísticas de usuários
-    st.markdown("---")
-    st.subheader("📊 Estatísticas de Usuários")
-    
-    users = get_all_users()
-    if users:
-        total_usuarios = len(users)
-        admin_count = sum(1 for user in users if user[1] == 'admin')
-        editor_count = sum(1 for user in users if user[1] == 'editor')
-        visualizador_count = sum(1 for user in users if user[1] == 'visualizador')
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total de Usuários", total_usuarios)
-        with col2:
-            st.metric("Administradores", admin_count)
-        with col3:
-            st.metric("Editores", editor_count)
-        with col4:
-            st.metric("Visualizadores", visualizador_count)
-    else:
-        st.info("Nenhum usuário cadastrado.")
 
 # =============================================================================
 # PÁGINA: CONTAS
@@ -1804,3 +1725,48 @@ st.markdown(
     """.format(username=st.session_state.username, date=datetime.now().strftime('%d/%m/%Y %H:%M')),
     unsafe_allow_html=True
 )
+# CORREÇÃO TEMPORÁRIA - Adicione antes do sistema de login
+def corrigir_tabela_usuarios():
+    """Corrige a tabela de usuários se necessário"""
+    conn = get_db_connection()
+    if not conn:
+        return
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Verificar se a tabela existe e tem problemas
+        cursor.execute('''
+            SELECT COLUMN_TYPE 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'permissao'
+        ''')
+        result = cursor.fetchone()
+        
+        if result and 'enum' in result[0].lower():
+            st.info("✅ Tabela de usuários parece estar correta")
+        else:
+            st.warning("🔄 Corrigindo tabela de usuários...")
+            # Recriar tabela se necessário
+            cursor.execute('DROP TABLE IF EXISTS usuarios')
+            cursor.execute('''
+                CREATE TABLE usuarios (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    permissao ENUM('admin', 'editor', 'visualizador') NOT NULL DEFAULT 'visualizador',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            st.success("✅ Tabela corrigida!")
+            
+    except Exception as e:
+        st.error(f"Erro ao verificar tabela: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+# Chamar a correção temporária
+if st.session_state.get('logged_in') is None:
+    corrigir_tabela_usuarios()
