@@ -121,7 +121,9 @@ except Exception as e:
 # =============================================================================
 
 def init_auth_db():
-"""Inicializa a tabela de usuários com VARCHAR em vez de ENUM - CORRIGIDA"""
+    """Inicializa a tabela de usuários com VARCHAR em vez de ENUM - CORRIGIDA"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return
