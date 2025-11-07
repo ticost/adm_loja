@@ -50,7 +50,7 @@ def carregar_imagem_logo(nome_arquivo):
         
         for caminho in caminhos_tentativos:
             if os.path.exists(caminho):
-                st.sidebar.image(caminho, width='stretch')  # CORRIGIDO: width='stretch'
+                st.sidebar.image(caminho, use_column_width=True)
                 return True
         
         # Se não encontrou, mostra placeholder
@@ -114,11 +114,11 @@ def get_db_connection():
         return None
 
 # =============================================================================
-# FUNÇÕES DE AUTENTICAÇÃO
+# FUNÇÕES DE AUTENTICAÇÃO - CORRIGIDAS
 # =============================================================================
 
 def init_auth_db():
-    """Inicializa a tabela de usuários com permissões - CORRIGIDA"""
+    """Inicializa a tabela de usuários com VARCHAR em vez de ENUM - CORRIGIDA"""
     conn = get_db_connection()
     if not conn:
         return
@@ -126,13 +126,13 @@ def init_auth_db():
     try:
         cursor = conn.cursor()
         
-        # CORREÇÃO: Criar tabela com ENUM explícito
+        # CORREÇÃO: Criar tabela com VARCHAR em vez de ENUM
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
-                permissao ENUM('admin', 'editor', 'visualizador') NOT NULL DEFAULT 'visualizador',
+                permissao VARCHAR(20) NOT NULL DEFAULT 'visualizador',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -155,6 +155,7 @@ def init_auth_db():
             )
         
         conn.commit()
+        st.success("✅ Tabela de usuários inicializada com sucesso!")
     except Error as e:
         st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
     finally:
@@ -202,7 +203,7 @@ def user_can_edit():
     return st.session_state.permissao in ['admin', 'editor']
 
 # =============================================================================
-# FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS
+# FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS - CORRIGIDAS
 # =============================================================================
 
 def criar_usuario(username, password, permissao):
@@ -221,6 +222,10 @@ def criar_usuario(username, password, permissao):
         cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = %s', (username,))
         if cursor.fetchone()[0] > 0:
             return False, "Usuário já existe"
+        
+        # Validar permissão
+        if permissao not in PERMISSOES:
+            return False, "Permissão inválida"
         
         # Criar hash da senha
         password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -263,6 +268,10 @@ def update_user_permission(username, nova_permissao):
     """Atualiza permissão do usuário"""
     if not user_is_admin():
         return False, "Apenas administradores podem atualizar permissões"
+    
+    # Validar permissão
+    if nova_permissao not in PERMISSOES:
+        return False, "Permissão inválida"
     
     conn = get_db_connection()
     if not conn:
@@ -379,6 +388,7 @@ def init_db():
         ''')
         
         conn.commit()
+        st.success("✅ Tabelas do sistema inicializadas com sucesso!")
     except Error as e:
         st.error(f"❌ Erro ao criar tabelas: {e}")
     finally:
@@ -836,7 +846,7 @@ if not st.session_state.logged_in:
             username = st.text_input("Usuário", placeholder="Digite seu usuário")
             password = st.text_input("Senha", type="password", placeholder="Digite sua senha")
             
-            submitted = st.form_submit_button("🚪 Entrar", width='stretch')
+            submitted = st.form_submit_button("🚪 Entrar", use_container_width=True)
             
             if submitted:
                 if username and password:
@@ -871,7 +881,7 @@ with st.sidebar:
     st.sidebar.info(f"🔐 **Permissão:** {PERMISSOES.get(st.session_state.permissao, 'Desconhecida')}")
     
     # Botão de logout
-    if st.sidebar.button("🚪 Sair", width='stretch'):
+    if st.sidebar.button("🚪 Sair", use_container_width=True):
         logout_user()
         st.rerun()
     
@@ -881,7 +891,7 @@ with st.sidebar:
             new_password = st.text_input("Nova Senha", type="password")
             confirm_password = st.text_input("Confirmar Senha", type="password")
             
-            if st.form_submit_button("💾 Alterar Senha", width='stretch'):
+            if st.form_submit_button("💾 Alterar Senha", use_container_width=True):
                 if new_password and confirm_password:
                     if new_password == confirm_password:
                         success, message = change_password(st.session_state.username, new_password)
@@ -1022,7 +1032,7 @@ elif pagina == "👥 Gerenciar Usuários":
                     format_func=lambda x: PERMISSOES[x]
                 )
             
-            submitted = st.form_submit_button("👤 Criar Usuário", width='stretch')
+            submitted = st.form_submit_button("👤 Criar Usuário", use_container_width=True)
             
             if submitted:
                 if not novo_username or not nova_senha or not confirmar_senha:
@@ -1071,7 +1081,7 @@ elif pagina == "👥 Gerenciar Usuários":
                 
                 with col4:
                     if username != st.session_state.username and nova_permissao != permissao:
-                        if st.button("💾", key=f"save_{username}", width='stretch'):
+                        if st.button("💾", key=f"save_{username}", use_container_width=True):
                             success, message = update_user_permission(username, nova_permissao)
                             if success:
                                 st.success(message)
@@ -1101,7 +1111,7 @@ elif pagina == "👥 Gerenciar Usuários":
                         st.write(PERMISSOES.get(permissao, 'Desconhecida'))
                     
                     with col3:
-                        if st.button("🗑️ Excluir", key=f"del_{username}", width='stretch'):
+                        if st.button("🗑️ Excluir", key=f"del_{username}", use_container_width=True):
                             if st.checkbox(f"Confirmar exclusão de {username}", key=f"confirm_del_{username}"):
                                 success, message = delete_user(username)
                                 if success:
@@ -1163,7 +1173,7 @@ elif pagina == "📝 Contas":
         
         nova_conta = st.text_input("**Nome da Nova Conta**", placeholder="Ex: Salários, Aluguel, Vendas...")
         
-        if st.button("✅ Adicionar Conta", width='stretch') and nova_conta:
+        if st.button("✅ Adicionar Conta", use_container_width=True) and nova_conta:
             adicionar_conta(nova_conta)
             st.rerun()
     else:
@@ -1219,7 +1229,7 @@ elif pagina == "📥 Lançamentos":
                     saida = st.number_input("**Valor (R$)**", min_value=0.0, step=0.01, format="%.2f")
                     entrada = 0.0
             
-            submitted = st.form_submit_button("💾 Salvar Lançamento", width='stretch')
+            submitted = st.form_submit_button("💾 Salvar Lançamento", use_container_width=True)
             
             if submitted and historico:
                 # Calcular saldo
@@ -1286,7 +1296,7 @@ elif pagina == "📥 Lançamentos":
                     data=csv_data,
                     file_name=f"livro_caixa_{mes_selecionado}_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
-                    width='stretch'
+                    use_container_width=True
                 )
             
             # Apenas usuários com permissão de edição podem gerenciar lançamentos
@@ -1349,7 +1359,7 @@ elif pagina == "📥 Lançamentos":
                                     with col8:
                                         st.write("")  # Espaçamento
                                         st.write("")  # Espaçamento
-                                        submitted_editar = st.form_submit_button("💾 Atualizar", width='stretch')
+                                        submitted_editar = st.form_submit_button("💾 Atualizar", use_container_width=True)
                                     
                                     if submitted_editar and historico_editar:
                                         # Atualizar lançamento no banco
@@ -1360,7 +1370,7 @@ elif pagina == "📥 Lançamentos":
                             
                             with col_del:
                                 st.write("**Excluir:**")
-                                if st.button("🗑️ Excluir", width='stretch', type="secondary"):
+                                if st.button("🗑️ Excluir", use_container_width=True, type="secondary"):
                                     if st.checkbox("✅ Confirmar exclusão"):
                                         if excluir_lancamento(lancamento_id, mes_selecionado):
                                             st.success("✅ Lançamento excluído com sucesso!")
@@ -1393,7 +1403,7 @@ elif pagina == "📥 Lançamentos":
     
     # Botão para limpar lançamentos do mês (apenas editores)
     if user_can_edit():
-        if st.button(f"🗑️ Limpar TODOS os Lançamentos de {mes_selecionado}", width='stretch', type="secondary"):
+        if st.button(f"🗑️ Limpar TODOS os Lançamentos de {mes_selecionado}", use_container_width=True, type="secondary"):
             if st.checkbox("✅ Confirmar exclusão de TODOS os lançamentos"):
                 limpar_lancamentos_mes(mes_selecionado)
                 st.rerun()
@@ -1417,7 +1427,7 @@ elif pagina == "📅 Calendário":
     col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([1, 2, 1, 1])
     
     with col_nav1:
-        if st.button("⏮️ Mês Anterior", width='stretch'):
+        if st.button("⏮️ Mês Anterior", use_container_width=True):
             if st.session_state.calendario_mes == 1:
                 st.session_state.calendario_ano -= 1
                 st.session_state.calendario_mes = 12
@@ -1429,7 +1439,7 @@ elif pagina == "📅 Calendário":
         st.subheader(f"{calendar.month_name[st.session_state.calendario_mes]} de {st.session_state.calendario_ano}")
     
     with col_nav3:
-        if st.button("⏭️ Próximo Mês", width='stretch'):
+        if st.button("⏭️ Próximo Mês", use_container_width=True):
             if st.session_state.calendario_mes == 12:
                 st.session_state.calendario_ano += 1
                 st.session_state.calendario_mes = 1
@@ -1438,7 +1448,7 @@ elif pagina == "📅 Calendário":
             st.rerun()
     
     with col_nav4:
-        if st.button("📅 Hoje", width='stretch'):
+        if st.button("📅 Hoje", use_container_width=True):
             st.session_state.calendario_ano = hoje.year
             st.session_state.calendario_mes = hoje.month
             st.rerun()
@@ -1482,7 +1492,7 @@ elif pagina == "📅 Calendário":
                     )
                     
                     # Adicionar interação para clicar no dia
-                    if st.button(f"Selecionar", key=f"dia_{dia}", width='stretch'):
+                    if st.button(f"Selecionar", key=f"dia_{dia}", use_container_width=True):
                         st.session_state.dia_selecionado = dia
                 else:
                     st.markdown('<div style="padding: 10px; margin: 2px; border-radius: 5px; min-height: 80px;"></div>', unsafe_allow_html=True)
@@ -1511,7 +1521,7 @@ elif pagina == "📅 Calendário":
             
             cor_evento = st.color_picker("**Cor do Evento**", value="#1f77b4")
             
-            submitted = st.form_submit_button("💾 Salvar Evento", width='stretch')
+            submitted = st.form_submit_button("💾 Salvar Evento", use_container_width=True)
             
             if submitted and titulo:
                 if salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
@@ -1555,12 +1565,12 @@ elif pagina == "📅 Calendário":
                         col_edit_ev, col_del_ev = st.columns(2)
                         
                         with col_edit_ev:
-                            if st.button("✏️ Editar", key=f"edit_{evento['id']}", width='stretch'):
+                            if st.button("✏️ Editar", key=f"edit_{evento['id']}", use_container_width=True):
                                 st.session_state.editando_evento = evento['id']
                                 st.rerun()
                         
                         with col_del_ev:
-                            if st.button("🗑️ Excluir", key=f"del_{evento['id']}", width='stretch'):
+                            if st.button("🗑️ Excluir", key=f"del_{evento['id']}", use_container_width=True):
                                 if excluir_evento(evento['id']):
                                     st.rerun()
                     else:
@@ -1610,9 +1620,9 @@ elif pagina == "📅 Calendário":
                 
                 col_salvar, col_cancelar = st.columns(2)
                 with col_salvar:
-                    submitted_edit = st.form_submit_button("💾 Atualizar Evento", width='stretch')
+                    submitted_edit = st.form_submit_button("💾 Atualizar Evento", use_container_width=True)
                 with col_cancelar:
-                    if st.form_submit_button("❌ Cancelar", width='stretch'):
+                    if st.form_submit_button("❌ Cancelar", use_container_width=True):
                         del st.session_state.editando_evento
                         st.rerun()
                 
@@ -1625,7 +1635,7 @@ elif pagina == "📅 Calendário":
                     st.warning("⚠️ Por favor, insira um título para o evento.")
         else:
             st.error("❌ Você não tem permissão para editar este evento.")
-            if st.button("⬅️ Voltar", width='stretch'):
+            if st.button("⬅️ Voltar", use_container_width=True):
                 del st.session_state.editando_evento
                 st.rerun()
 
@@ -1722,7 +1732,7 @@ elif pagina == "💾 Exportar Dados":
                 data=csv_data,
                 file_name=f"livro_caixa_{mes_download}_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv",
-                width='stretch'
+                use_container_width=True
             )
         else:
             st.warning(f"📭 Nenhum dado encontrado para {mes_download}")
@@ -1731,7 +1741,7 @@ elif pagina == "💾 Exportar Dados":
         
         # Exportação completa
         st.subheader("📦 Exportação Completa")
-        if st.button("📦 Exportar Todos os Dados", width='stretch'):
+        if st.button("📦 Exportar Todos os Dados", use_container_width=True):
             with st.spinner("Gerando arquivo ZIP..."):
                 output = exportar_para_csv()
                 
@@ -1741,7 +1751,7 @@ elif pagina == "💾 Exportar Dados":
                         data=output,
                         file_name=f"livro_caixa_completo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
                         mime="application/zip",
-                        width='stretch'
+                        use_container_width=True
                     )
                     st.success("✅ Arquivo ZIP gerado com sucesso!")
                 else:
