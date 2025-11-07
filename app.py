@@ -614,8 +614,10 @@ finally:
     if conn:
         conn.close()
 
-def get_eventos_mes(ano, mes):
-"""Busca eventos do mês"""
+def get_month_events():
+    """Busca eventos do mês"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return pd.DataFrame()
