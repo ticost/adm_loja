@@ -211,7 +211,9 @@ def user_is_admin():
 return st.session_state.permissao == 'admin'
 
 def user_can_edit():
-"""Verifica se usuário pode editar (admin ou editor)"""
+    """Verifica se usuário pode editar (admin ou editor)"""
+    pass
+
 return st.session_state.permissao in ['admin', 'editor']
 
 # =============================================================================
