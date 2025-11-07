@@ -1198,7 +1198,7 @@ else:
 # PÁGINA: CONTAS
 # =============================================================================
 
-elif pagina == "📝 Contas":
+if pagina == "📝 Contas":
     st.title("📝 Contas")
 
 # Buscar contas do banco
@@ -1227,8 +1227,8 @@ else:
 # PÁGINA: LANÇAMENTOS
 # =============================================================================
 
-elif pagina == "📥 Lançamentos":
-st.title("📥 Lançamentos do Caixa")
+if pagina == "📥 Lançamentos":
+    st.title("📥 Lançamentos do Caixa")
 
 meses = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
