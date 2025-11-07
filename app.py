@@ -441,8 +441,10 @@ finally:
     if conn:
         conn.close()
 
-def adicionar_conta(nome_conta):
-"""Adiciona nova conta"""
+def create_account():
+    """Adiciona nova conta"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
