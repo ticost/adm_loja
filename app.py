@@ -314,6 +314,8 @@ finally:
 
 def delete_user(username):
 """Exclui usuário"""
+    pass
+
 if not user_is_admin():
     return False, "Apenas administradores podem excluir usuários"
 
