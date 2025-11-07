@@ -732,8 +732,10 @@ if df.empty:
 
 return df.to_csv(index=False, encoding='utf-8')
 
-def exportar_para_csv():
-"""Exporta todos os dados para ZIP"""
+def export_all_data():
+    """Exporta todos os dados para ZIP"""
+    pass
+
 try:
     # Criar arquivo ZIP em memória
     zip_buffer = io.BytesIO()
