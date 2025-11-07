@@ -1098,14 +1098,14 @@ elif pagina == "👥 Gerenciar Usuários":
         else:
             st.info("📭 Nenhum usuário cadastrado.")
     
-    with tab3:
+   with tab3:
         st.subheader("🗑️ Excluir Usuários")
         
         users = get_all_users()
         if users:
             st.warning("⚠️ **Atenção:** Esta ação não pode ser desfeita!")
             
-           for i, (username, email, permissao, created_at) in enumerate(users, 1):
+            for i, (username, email, permissao, created_at) in enumerate(users, 1):
                 if username != st.session_state.username:  # Não permitir excluir a si mesmo
                     col1, col2, col3 = st.columns([3, 2, 1])
                     
