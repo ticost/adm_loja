@@ -481,8 +481,10 @@ finally:
     if conn:
         conn.close()
 
-def salvar_lancamento(mes, data, historico, complemento, entrada, saida, saldo):
-"""Salva novo lançamento"""
+def create_transaction():
+    """Salva novo lançamento"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
