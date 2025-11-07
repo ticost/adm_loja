@@ -1098,36 +1098,27 @@ elif pagina == "👥 Gerenciar Usuários":
         else:
             st.info("📭 Nenhum usuário cadastrado.")
     
-   with tab3:
-        st.subheader("🗑️ Excluir Usuários")
-        
-        users = get_all_users()
-        if users:
-            st.warning("⚠️ **Atenção:** Esta ação não pode ser desfeita!")
-            
-            for i, (username, email, permissao, created_at) in enumerate(users, 1):
-                if username != st.session_state.username:  # Não permitir excluir a si mesmo
-                    col1, col2, col3 = st.columns([3, 2, 1])
-                    
-                    with col1:
-                        st.write(f"**{username}** - 📧 {email}")
-                    
-                    with col2:
-                        st.write(PERMISSOES.get(permissao, 'Desconhecida'))
-                    
-                    with col3:
-                        if st.button("🗑️ Excluir", key=f"del_{username}", use_container_width=True):
-                            if st.checkbox(f"Confirmar exclusão de {username}", key=f"confirm_del_{username}"):
-                                success, message = delete_user(username)
+        with tab3:
+            users = get_all_users()
+            if users:
+                for username, email, permissao, created_at in users:
+                    if username != st.session_state.username:
+                        col1, col2, col3 = st.columns([3, 2, 1])
+                        with col1:
+                            st.write(f"**{username}** - 📧 {email}")
+                        with col2:
+                            st.write(PERMISSOES.get(permissao, 'Desconhecida'))
+                        with col3:
+                            if st.button("🗑️ Excluir", key=f"del_{username}"):
+                                success, msg = delete_user(username)
                                 if success:
-                                    st.success(message)
+                                    st.success(msg)
                                     st.rerun()
                                 else:
-                                    st.error(message)
-                    
-                    st.markdown("---")
+                                    st.error(msg)
             else:
-                st.info("ℹ️ Você não pode excluir seu próprio usuário.")
+                st.info("Nenhum usuário encontrado.")
+
         else:
             st.info("📭 Nenhum usuário para excluir.")
 
