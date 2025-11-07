@@ -1105,12 +1105,12 @@ elif pagina == "👥 Gerenciar Usuários":
         if users:
             st.warning("⚠️ **Atenção:** Esta ação não pode ser desfeita!")
             
-            for i, (username, permissao, created_at) in enumerate(users, 1):
+           for i, (username, email, permissao, created_at) in enumerate(users, 1):
                 if username != st.session_state.username:  # Não permitir excluir a si mesmo
                     col1, col2, col3 = st.columns([3, 2, 1])
                     
                     with col1:
-                        st.write(f"**{username}**")
+                        st.write(f"**{username}** - 📧 {email}")
                     
                     with col2:
                         st.write(PERMISSOES.get(permissao, 'Desconhecida'))
