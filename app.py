@@ -1199,7 +1199,7 @@ else:
 # =============================================================================
 
 elif pagina == "📝 Contas":
-st.title("📝 Contas")
+    st.title("📝 Contas")
 
 # Buscar contas do banco
 contas = get_contas()
