@@ -996,7 +996,7 @@ pagina = st.radio(
 # =============================================================================
 
 if pagina == "📋 Ajuda":
-st.title("📋 Ajuda - Livro Caixa")
+    st.title("📋 Ajuda - Livro Caixa")
 
 col1, col2 = st.columns([2, 1])
 
