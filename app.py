@@ -197,7 +197,9 @@ finally:
         conn.close()
 
 def logout_user():
-"""Faz logout do usuário"""
+    """Faz logout do usuário"""
+    pass
+
 st.session_state.logged_in = False
 st.session_state.username = None
 st.session_state.permissao = None
