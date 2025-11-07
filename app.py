@@ -205,7 +205,9 @@ st.session_state.username = None
 st.session_state.permissao = None
 
 def user_is_admin():
-"""Verifica se usuário é admin"""
+    """Verifica se usuário é admin"""
+    pass
+
 return st.session_state.permissao == 'admin'
 
 def user_can_edit():
