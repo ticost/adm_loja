@@ -593,8 +593,10 @@ finally:
     if conn:
         conn.close()
 
-def limpar_lancamentos_mes(mes):
-"""Limpa todos os lançamentos do mês"""
+def clear_month_transactions():
+    """Limpa todos os lançamentos do mês"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
