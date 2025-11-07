@@ -555,8 +555,10 @@ finally:
     if conn:
         conn.close()
 
-def excluir_lancamento(lancamento_id, mes):
-"""Exclui lançamento"""
+def delete_transaction():
+    """Exclui lançamento"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
