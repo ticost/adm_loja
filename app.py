@@ -283,8 +283,10 @@ finally:
     if conn:
         conn.close()
 
-def update_user_permission(username, nova_permissao):
-"""Atualiza permissão do usuário"""
+def update_user_permission():
+    """Atualiza permissão do usuário"""
+    pass
+
 if not user_is_admin():
     return False, "Apenas administradores podem atualizar permissões"
 
