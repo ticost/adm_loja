@@ -168,8 +168,10 @@ finally:
     if conn:
         conn.close()
 
-def login_user(username, password):
-"""Autentica usuário"""
+def login_user():
+    """Autentica usuário"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False, "Erro de conexão"
