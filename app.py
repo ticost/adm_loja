@@ -312,8 +312,8 @@ finally:
     if conn:
         conn.close()
 
-def delete_user(username):
-"""Exclui usuário"""
+def delete_user():
+    """Exclui usuário"""
     pass
 
 if not user_is_admin():
