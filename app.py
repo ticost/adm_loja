@@ -868,8 +868,11 @@ if not conn:
 
 pagina_configuracao()
 st.stop()
+if not conn:
+    st.error("❌ Falha na conexão. Verifique as configurações.")
 else:
-conn.close()
+    st.success("✅ Conexão estabelecida com sucesso!")
+
 
 # =============================================================================
 # INICIALIZAÇÃO DO SISTEMA
