@@ -131,6 +131,7 @@ def init_auth_db():
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(100) UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
                 permissao VARCHAR(20) NOT NULL DEFAULT 'visualizador',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -206,7 +207,7 @@ def user_can_edit():
 # FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS - CORRIGIDAS
 # =============================================================================
 
-def criar_usuario(username, password, permissao):
+def criar_usuario(username, email, password, permissao):
     """Cria um novo usuário no sistema"""
     if not user_is_admin():
         return False, "Apenas administradores podem criar usuários"
@@ -218,10 +219,10 @@ def criar_usuario(username, password, permissao):
     try:
         cursor = conn.cursor()
         
-        # Verificar se usuário já existe
-        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = %s', (username,))
+        # Verificar duplicidade
+        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = %s OR email = %s', (username, email))
         if cursor.fetchone()[0] > 0:
-            return False, "Usuário já existe"
+            return False, "Usuário ou e-mail já existe"
         
         # Validar permissão
         if permissao not in PERMISSOES:
@@ -232,8 +233,8 @@ def criar_usuario(username, password, permissao):
         
         # Inserir novo usuário
         cursor.execute(
-            'INSERT INTO usuarios (username, password_hash, permissao) VALUES (%s, %s, %s)',
-            (username, password_hash, permissao)
+            'INSERT INTO usuarios (username, email, password_hash, permissao) VALUES (%s, %s, %s, %s)',
+            (username, email, password_hash, permissao)
         )
         
         conn.commit()
@@ -244,6 +245,7 @@ def criar_usuario(username, password, permissao):
     finally:
         if conn:
             conn.close()
+
 
 def get_all_users():
     """Busca todos os usuários (apenas admin)"""
@@ -256,7 +258,7 @@ def get_all_users():
     
     try:
         cursor = conn.cursor()
-        cursor.execute('SELECT username, permissao, created_at FROM usuarios ORDER BY created_at')
+        cursor.execute('SELECT username, email, permissao, created_at FROM usuarios ORDER BY created_at')
         return cursor.fetchall()
     except Error:
         return []
@@ -1022,7 +1024,10 @@ elif pagina == "👥 Gerenciar Usuários":
             
             with col1:
                 novo_username = st.text_input("**Nome de usuário**", placeholder="Digite o nome de usuário")
+                email = st.text_input("**E-mail**", placeholder="Digite o e-mail do usuário")
                 nova_senha = st.text_input("**Senha**", type="password", placeholder="Digite a senha")
+
+
             
             with col2:
                 confirmar_senha = st.text_input("**Confirmar Senha**", type="password", placeholder="Confirme a senha")
@@ -1056,11 +1061,11 @@ elif pagina == "👥 Gerenciar Usuários":
         if users:
             st.write("**Usuários cadastrados:**")
             
-            for i, (username, permissao, created_at) in enumerate(users, 1):
-                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-                
+            for i, (username, email, permissao, created_at) in enumerate(users, 1):
+                col1, col2, col3, col4 = st.columns([3, 3, 2, 1])
                 with col1:
-                    st.write(f"**{username}**")
+                    st.write(f"**{username}** - 📧 {email}")
+
                 
                 with col2:
                     st.write(PERMISSOES.get(permissao, 'Desconhecida'))
