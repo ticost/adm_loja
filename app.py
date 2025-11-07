@@ -220,8 +220,10 @@ return st.session_state.permissao in ['admin', 'editor']
 # FUNÇÕES DE CRIAÇÃO E GERENCIAMENTO DE USUÁRIOS - CORRIGIDAS
 # =============================================================================
 
-def criar_usuario(username, email, password, permissao):
-"""Cria um novo usuário no sistema"""
+def criar_usuario():
+    """Cria um novo usuário no sistema"""
+    pass
+
 if not user_is_admin():
     return False, "Apenas administradores podem criar usuários"
 
