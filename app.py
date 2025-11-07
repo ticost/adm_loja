@@ -790,22 +790,54 @@ with st.sidebar:
                 else:
                     st.warning("⚠️ Preencha todos os campos!")
 
+# Menu principal
+menu_options = {
+    "📋 Ajuda": "ajuda",
+    "👥 Gerenciar Usuários": "usuarios",
+    "📝 Contas": "contas",
+    "📥 Lançamentos": "lancamentos",
+    "📅 Calendário": "calendario",
+    "📈 Balanço Financeiro": "balanco",
+    "💾 Exportar Dados": "exportar",
+    "💽 Criar Backup": "backup"
+}
+
+# Seleção do menu
+menu_choice = st.sidebar.radio("Navegação", list(menu_options.keys()))
+
+# Aqui você pode usar o valor selecionado para mostrar o conteúdo correspondente
+if menu_choice == "📋 Ajuda":
+    st.write("Página de Ajuda")
+elif menu_choice == "👥 Gerenciar Usuários":
+    st.write("Página de Gerenciamento de Usuários")
+elif menu_choice == "📝 Contas":
+    st.write("Página de Contas")
+elif menu_choice == "📥 Lançamentos":
+    st.write("Página de Lançamentos")
+elif menu_choice == "📅 Calendário":
+    st.write("Página de Calendário")
+elif menu_choice == "📈 Balanço Financeiro":
+    st.write("Página de Balanço Financeiro")
+elif menu_choice == "💾 Exportar Dados":
+    st.write("Página de Exportação de Dados")
+elif menu_choice == "💽 Criar Backup":
+    st.write("Página de Backup")
 st.markdown("---")
 
-opcoes_menu = [
-    "📋 Ajuda",
-    "👥 Gerenciar Usuários",
-    "📝 Contas",
-    "📥 Lançamentos",
-    "📅 Calendário",
+#opcoes_menu = [
+#    "📋 Ajuda",
+ #   "👥 Gerenciar Usuários",
+  #  "📝 Contas",
+   # "📥 Lançamentos",
+    #"📅 Calendário",
     "📈 Balanço Financeiro",
-    "💾 Exportar Dados"
+    #"💾 Exportar Dados"
 ]
 
-pagina = st.radio("**Navegação:**", opcoes_menu, label_visibility="collapsed")
+#pagina = st.radio("**Navegação:**", opcoes_menu, label_visibility="collapsed")
 
 # ----------------------------
-# PÁGINA: AJUDA (mantida)
+# PÁ3GINA: AJUDA (mantida)
 # ----------------------------
 if pagina == "📋 Ajuda":
     st.title("📋 Ajuda - Livro Caixa")
