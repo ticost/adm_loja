@@ -50,12 +50,24 @@ try:
         f"./{nome_arquivo}"
     ]
     
+  def carregar_imagem_logo(nome_arquivo):
+    """Carrega a imagem do logo com múltiplas tentativas de caminho"""
+    caminhos_tentativos = [
+        nome_arquivo,
+        f"./{nome_arquivo}",
+        f"imagens/{nome_arquivo}",
+        f"./imagens/{nome_arquivo}"
+    ]
+
     for caminho in caminhos_tentativos:
         if os.path.exists(caminho):
             st.sidebar.image(caminho, use_column_width=True)
-            return True
-    
+            return True  # ✅ agora dentro da função
+
     # Se não encontrou, mostra placeholder
+    st.sidebar.write("🖼️ Logo não encontrado.")
+    return False
+
     st.sidebar.markdown("""
     <div style="text-align: center; padding: 20px; border: 2px dashed #ccc; border-radius: 10px;">
         <div style="font-size: 48px;">🏢</div>
