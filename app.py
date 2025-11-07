@@ -779,8 +779,11 @@ except Exception as e:
 # PÁGINA DE CONFIGURAÇÃO
 # =============================================================================
 
-def pagina_configuracao():
-st.title("⚙️ Configuração do Sistema")
+def configurar_sistema():
+    st.title("⚙️ Configuração do Sistema")
+    st.markdown("---")
+    st.write("Área para configurações gerais do sistema (usuários, permissões, backups, etc).")
+
 
 st.error("""
 ## ❌ Secrets não configurados
