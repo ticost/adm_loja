@@ -32,6 +32,30 @@ PERMISSOES = {
 }
 
 # =============================================================================
+# INICIALIZAÇÃO DO SESSION STATE
+# =============================================================================
+def init_session_state():
+    """Inicializa todas as variáveis do session state"""
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.session_state.permissao = None
+    
+    # Variáveis para gerenciamento de usuários
+    if 'editing_user' not in st.session_state:
+        st.session_state.editing_user = None
+    if 'viewing_user' not in st.session_state:
+        st.session_state.viewing_user = None
+    
+    # Variáveis para gerenciamento de eventos
+    if 'editing_event' not in st.session_state:
+        st.session_state.editing_event = None
+    
+    # Variáveis para navegação
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "📊 Livro Caixa"
+
+# =============================================================================
 # FUNÇÃO PARA CARREGAR IMAGEM DO LOGO
 # =============================================================================
 def carregar_imagem_logo(nome_arquivo):
@@ -203,6 +227,10 @@ def logout_user():
     st.session_state.logged_in = False
     st.session_state.username = None
     st.session_state.permissao = None
+    st.session_state.editing_user = None
+    st.session_state.viewing_user = None
+    st.session_state.editing_event = None
+    st.session_state.current_page = "📊 Livro Caixa"
 
 def user_is_admin():
     """Verifica se usuário é admin"""
@@ -1131,17 +1159,6 @@ def gerar_html_agenda_contatos(users):
     
     return html_content
 
-def gerar_pdf_agenda_contatos(users):
-    """Gera PDF da agenda de contatos (versão simplificada)"""
-    try:
-        # Em uma implementação real, você usaria weasyprint ou reportlab
-        # Aqui vamos retornar o HTML para download
-        html_content = gerar_html_agenda_contatos(users)
-        return html_content
-    except Exception as e:
-        st.error(f"❌ Erro ao gerar PDF: {e}")
-        return None
-
 def visualizar_agenda_contatos():
     """Interface para visualização da agenda de contatos"""
     st.header("📒 Agenda de Contatos")
@@ -1342,10 +1359,6 @@ def visualizar_agenda_contatos():
                 if st.button("✏️ Editar", key=f"edit_{username}", use_container_width=True):
                     st.session_state.editing_user = username
                     st.rerun()
-                
-                if st.button("👁️ Ver Detalhes", key=f"view_{username}", use_container_width=True):
-                    st.session_state.viewing_user = username
-                    st.rerun()
             
             st.markdown("---")
 
@@ -1356,13 +1369,8 @@ def visualizar_agenda_contatos():
 def main():
     """Função principal da aplicação"""
     
-    # Inicializar sessão
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.session_state.permissao = None
-        st.session_state.editing_user = None
-        st.session_state.viewing_user = None
+    # Inicializar session state
+    init_session_state()
     
     # Inicializar banco de dados
     init_auth_db()
@@ -1419,7 +1427,7 @@ def show_main_application():
             menu_options.append("👥 Gerenciar Usuários")
             menu_options.append("📒 Agenda de Contatos")
         
-        selected_menu = st.radio("Navegação", menu_options)
+        selected_menu = st.radio("Navegação", menu_options, key="nav_menu")
         
         st.markdown("---")
         
@@ -1503,7 +1511,7 @@ def show_livro_caixa():
 
 def show_novo_lancamento(mes):
     """Formulário para novo lançamento"""
-    with st.form("novo_lancamento"):
+    with st.form("novo_lancamento", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
         with col1:
@@ -1755,7 +1763,7 @@ def show_lista_eventos(df_eventos):
 
 def show_novo_evento():
     """Formulário para novo evento"""
-    with st.form("novo_evento"):
+    with st.form("novo_evento", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
         with col1:
@@ -1912,14 +1920,15 @@ def show_gerenciar_usuarios():
         show_usuarios_cadastrados()
     
     with tab3:
-        if st.session_state.editing_user:
+        # Verificar de forma segura se há usuário sendo editado
+        if hasattr(st.session_state, 'editing_user') and st.session_state.editing_user:
             show_editar_usuario(st.session_state.editing_user)
         else:
             st.info("👆 Selecione um usuário para editar na aba 'Usuários Cadastrados'")
 
 def show_novo_usuario():
     """Formulário para novo usuário"""
-    with st.form("novo_usuario"):
+    with st.form("novo_usuario", clear_on_submit=True):
         st.subheader("👤 Novo Usuário")
         
         col1, col2 = st.columns(2)
@@ -2040,6 +2049,7 @@ def show_editar_usuario(username):
     user_data = get_user_by_username(username)
     if not user_data:
         st.error("❌ Usuário não encontrado")
+        st.session_state.editing_user = None
         return
     
     # Extrair dados do usuário
@@ -2063,26 +2073,26 @@ def show_editar_usuario(username):
             novo_endereco = st.text_area("Endereço:", value=endereco or "", placeholder="Endereço completo")
             nova_data_aniversario = st.date_input(
                 "Data de Aniversário:",
-                value=data_aniversario or datetime.now().date()
+                value=data_aniversario if data_aniversario else None
             )
         
         with col2:
             # Campos de datas maçônicas
             nova_data_iniciacao = st.date_input(
                 "Data de Iniciação:",
-                value=data_iniciacao or datetime.now().date()
+                value=data_iniciacao if data_iniciacao else None
             )
             nova_data_elevacao = st.date_input(
                 "Data de Elevação:",
-                value=data_elevacao or datetime.now().date()
+                value=data_elevacao if data_elevacao else None
             )
             nova_data_exaltacao = st.date_input(
                 "Data de Exaltação:",
-                value=data_exaltacao or datetime.now().date()
+                value=data_exaltacao if data_exaltacao else None
             )
             nova_data_instalacao_posse = st.date_input(
                 "Data de Instalação/Posse:",
-                value=data_instalacao_posse or datetime.now().date()
+                value=data_instalacao_posse if data_instalacao_posse else None
             )
         
         novas_observacoes = st.text_area("Observações:", value=observacoes or "", placeholder="Observações adicionais")
@@ -2095,6 +2105,7 @@ def show_editar_usuario(username):
         
         with col_btn2:
             if st.form_submit_button("🔄 Redefinir Senha"):
+                # Para redefinir senha, vamos usar um modal simples
                 nova_senha = st.text_input("Nova Senha:", type="password", key="nova_senha")
                 if nova_senha:
                     if change_password(username, nova_senha):
@@ -2113,11 +2124,11 @@ def show_editar_usuario(username):
                 nome_completo=novo_nome_completo or None,
                 telefone=novo_telefone or None,
                 endereco=novo_endereco or None,
-                data_aniversario=nova_data_aniversario if data_aniversario else None,
-                data_iniciacao=nova_data_iniciacao if data_iniciacao else None,
-                data_elevacao=nova_data_elevacao if data_elevacao else None,
-                data_exaltacao=nova_data_exaltacao if data_exaltacao else None,
-                data_instalacao_posse=nova_data_instalacao_posse if data_instalacao_posse else None,
+                data_aniversario=nova_data_aniversario,
+                data_iniciacao=nova_data_iniciacao,
+                data_elevacao=nova_data_elevacao,
+                data_exaltacao=nova_data_exaltacao,
+                data_instalacao_posse=nova_data_instalacao_posse,
                 observacoes=novas_observacoes or None,
                 redes_sociais=novas_redes_sociais or None
             )
