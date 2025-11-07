@@ -701,8 +701,10 @@ finally:
     if conn:
         conn.close()
 
-def excluir_evento(evento_id):
-"""Exclui evento"""
+def delete_event():
+    """Exclui evento"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
