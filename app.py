@@ -897,7 +897,7 @@ init_auth_db()
 # =============================================================================
 
 if not st.session_state.logged_in:
-st.title("🔐 Login - Livro Caixa")
+    st.title("🔐 Login - Livro Caixa")
 
 col1, col2 = st.columns([1, 2])
 
