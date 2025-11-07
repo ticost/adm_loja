@@ -1167,8 +1167,8 @@ with tab3:
     else:
         st.info("Nenhum usuário encontrado.")
 
-    else:
-        st.info("📭 Nenhum usuário para excluir.")
+    #else:
+        #st.info("📭 Nenhum usuário para excluir.")
 
 # Estatísticas de usuários
 st.markdown("---")
