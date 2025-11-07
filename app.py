@@ -675,8 +675,10 @@ finally:
     if conn:
         conn.close()
 
-def atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
-"""Atualiza evento existente"""
+def update_event():
+    """Atualiza evento existente"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
