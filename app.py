@@ -366,7 +366,9 @@ finally:
 # =============================================================================
 
 def init_db():
-"""Inicializa as demais tabelas do sistema"""
+    """Inicializa as demais tabelas do sistema"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return
