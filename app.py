@@ -966,7 +966,7 @@ def gerar_html_agenda_contatos(users):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Agenda de Contatos - Sistema Livro Caixa</title>
+        <title>Agenda de Contatos - Administração de Loja Caixa</title>
         <style>
             body {{
                 font-family: Arial, sans-serif;
@@ -1056,7 +1056,7 @@ def gerar_html_agenda_contatos(users):
         <div class="header">
             <h1>📒 Agenda de Contatos</h1>
             <div class="subtitle">
-                Sistema Livro Caixa | Gerado em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}
+                Administração de Loja Caixa | Gerado em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}
             </div>
         </div>
     """
@@ -1151,7 +1151,7 @@ def gerar_html_agenda_contatos(users):
 
     html_content += f"""
         <div class="footer">
-            Total de contatos: {len(users)} | Sistema Livro Caixa © {datetime.now().year}
+            Total de contatos: {len(users)} | Administração de Loja Caixa © {datetime.now().year}
         </div>
     </body>
     </html>
@@ -1379,7 +1379,7 @@ def main():
     # Logo e cabeçalho
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title("📒 Sistema Livro Caixa")
+        st.title("📒 Administração de Loja Caixa")
         st.markdown("---")
     
     # Sistema de autenticação
