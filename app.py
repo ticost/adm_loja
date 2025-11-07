@@ -123,26 +123,32 @@ def init_auth_db():
             )
         ''')
 
-        # ADICIONAR CAMPOS OPCIONAIS - cada coluna é opcional (NULL)
-        alter_statements = [
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nome_completo VARCHAR(200)",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefone VARCHAR(50)",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS endereco TEXT",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_aniversario DATE",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_iniciacao DATE",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_elevacao DATE",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_exaltacao DATE",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_instalacao_posse DATE",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS observacoes TEXT",
-            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS redes_sociais VARCHAR(500)"
+        # VERIFICAR E ADICIONAR CAMPOS OPCIONAIS - método mais compatível
+        campos_adicionais = [
+            ('nome_completo', 'VARCHAR(200)'),
+            ('telefone', 'VARCHAR(50)'),
+            ('endereco', 'TEXT'),
+            ('data_aniversario', 'DATE'),
+            ('data_iniciacao', 'DATE'),
+            ('data_elevacao', 'DATE'),
+            ('data_exaltacao', 'DATE'),
+            ('data_instalacao_posse', 'DATE'),
+            ('observacoes', 'TEXT'),
+            ('redes_sociais', 'VARCHAR(500)')
         ]
 
-        for stmt in alter_statements:
-            try:
-                cursor.execute(stmt)
-            except Exception:
-                # Em ambientes onde IF NOT EXISTS não é suportado, ignorar falhas
-                pass
+        # Verificar quais colunas já existem
+        cursor.execute("SHOW COLUMNS FROM usuarios")
+        colunas_existentes = [coluna[0] for coluna in cursor.fetchall()]
+
+        # Adicionar colunas que não existem
+        for campo, tipo in campos_adicionais:
+            if campo not in colunas_existentes:
+                try:
+                    cursor.execute(f'ALTER TABLE usuarios ADD COLUMN {campo} {tipo}')
+                    st.success(f"✅ Coluna '{campo}' adicionada com sucesso!")
+                except Exception as e:
+                    st.warning(f"⚠️ Não foi possível adicionar a coluna '{campo}': {e}")
 
         # Inserir usuários padrão se não existirem
         cursor.execute('SELECT COUNT(*) FROM usuarios WHERE username = "admin"')
@@ -161,6 +167,7 @@ def init_auth_db():
             )
 
         conn.commit()
+        st.success("✅ Tabela de usuários inicializada/atualizada com sucesso!")
     except Error as e:
         st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
     finally:
@@ -852,11 +859,43 @@ elif pagina == "👥 Gerenciar Usuários":
                 nome_completo = st.text_input("Nome Completo (opcional)")
                 telefone = st.text_input("Telefone (opcional)")
                 endereco = st.text_area("Endereço (opcional)")
-                data_aniversario = st.date_input("Data de Aniversário (opcional)", value=None)
-                data_iniciacao = st.date_input("Data de Iniciação (opcional)", value=None)
-                data_elevacao = st.date_input("Data de Elevação (opcional)", value=None)
-                data_exaltacao = st.date_input("Data de Exaltação (opcional)", value=None)
-                data_instalacao_posse = st.date_input("Data de Instalação/Posse (opcional)", value=None)
+                
+                # DATAS COM RANGE AMPLIADO
+                data_aniversario = st.date_input(
+                    "Data de Aniversário (opcional)", 
+                    value=None,
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+                
+                data_iniciacao = st.date_input(
+                    "Data de Iniciação (opcional)", 
+                    value=None,
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+                
+                data_elevacao = st.date_input(
+                    "Data de Elevação (opcional)", 
+                    value=None,
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+                
+                data_exaltacao = st.date_input(
+                    "Data de Exaltação (opcional)", 
+                    value=None,
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+                
+                data_instalacao_posse = st.date_input(
+                    "Data de Instalação/Posse (opcional)", 
+                    value=None,
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+                
                 observacoes = st.text_area("Observações (opcional)")
                 redes_sociais = st.text_input("Redes Sociais (opcional) - ex: @usuario / link")
 
@@ -1039,8 +1078,6 @@ elif pagina == "👥 Gerenciar Usuários":
     else:
         st.info("Nenhum usuário cadastrado.")
 
-# ... (restante do código mantido igual para as outras páginas)
-
 # ----------------------------
 # PÁGINA: CONTAS
 # ----------------------------
@@ -1063,7 +1100,478 @@ elif pagina == "📝 Contas":
     else:
         st.info("👀 Modo de Visualização - Você pode apenas visualizar as contas existentes.")
 
-# ... (restante do código para as outras páginas permanece igual)
+# ----------------------------
+# PÁGINA: LANÇAMENTOS
+# ----------------------------
+elif pagina == "📥 Lançamentos":
+    st.title("📥 Lançamentos do Caixa")
+    meses = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ]
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        mes_selecionado = st.selectbox("Selecione o Mês", meses)
+    with col2:
+        st.info(f"Trabalhando no mês de {mes_selecionado}")
+        if not user_can_edit():
+            st.warning("Modo de Visualização - Você pode apenas visualizar os lançamentos.")
+
+    df_mes = get_lancamentos_mes(mes_selecionado)
+
+    if user_can_edit():
+        st.subheader("➕ Adicionar Lançamento")
+        with st.form("form_lancamento", clear_on_submit=True):
+            col3, col4, col5 = st.columns([2, 2, 1])
+            with col3:
+                data = st.date_input(
+                    "Data", 
+                    datetime.now().date(),
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+                historico = st.text_input("Histórico", placeholder="Descrição do lançamento...")
+            with col4:
+                complemento = st.text_input("Complemento", placeholder="Informações adicionais...")
+                tipo_movimento = st.selectbox("Tipo de Movimento", ["Entrada", "Saída"])
+            with col5:
+                if tipo_movimento == "Entrada":
+                    entrada = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
+                    saida = 0.0
+                else:
+                    saida = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
+                    entrada = 0.0
+            submitted = st.form_submit_button("💾 Salvar Lançamento", use_container_width=True)
+            if submitted and historico:
+                if df_mes.empty:
+                    saldo = entrada - saida
+                else:
+                    if 'saldo' in df_mes.columns and len(df_mes) > 0:
+                        saldo_anterior = df_mes.iloc[-1]['saldo']
+                    else:
+                        saldo_anterior = 0.0
+                    saldo = saldo_anterior + entrada - saida
+                salvar_lancamento(mes_selecionado, data, historico, complemento, entrada, saida, saldo)
+                st.rerun()
+    else:
+        st.info("Para adicionar ou editar lançamentos, solicite permissão de edição ao administrador.")
+
+    st.subheader(f"📋 Lançamentos - {mes_selecionado}")
+    if not df_mes.empty:
+        colunas_mapeadas = {
+            'id': 'ID',
+            'data': 'DATA',
+            'historico': 'HISTÓRICO',
+            'complemento': 'COMPLEMENTO',
+            'entrada': 'ENTRADA',
+            'saida': 'SAÍDA',
+            'saldo': 'SALDO'
+        }
+        colunas_existentes = [col for col in colunas_mapeadas.keys() if col in df_mes.columns]
+        if colunas_existentes:
+            df_exibir = df_mes[colunas_existentes].copy()
+            df_exibir.columns = [colunas_mapeadas[col] for col in colunas_existentes]
+            df_exibir_display = df_exibir.copy()
+            if 'DATA' in df_exibir_display.columns:
+                df_exibir_display['DATA'] = pd.to_datetime(df_exibir_display['DATA']).dt.strftime('%d/%m/%Y')
+            if 'ENTRADA' in df_exibir_display.columns:
+                df_exibir_display['ENTRADA'] = df_exibir_display['ENTRADA'].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
+            if 'SAÍDA' in df_exibir_display.columns:
+                df_exibir_display['SAÍDA'] = df_exibir_display['SAÍDA'].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
+            if 'SALDO' in df_exibir_display.columns:
+                df_exibir_display['SALDO'] = df_exibir_display['SALDO'].apply(lambda x: f"R$ {x:,.2f}")
+            st.dataframe(df_exibir_display, use_container_width=True, hide_index=True)
+
+            st.subheader("📥 Download do Mês")
+            csv_data = download_csv_mes(mes_selecionado)
+            if csv_data:
+                st.download_button(
+                    label=f"💾 Baixar {mes_selecionado} em CSV",
+                    data=csv_data,
+                    file_name=f"livro_caixa_{mes_selecionado}_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            if user_can_edit():
+                st.subheader("✏️ Gerenciar Lançamentos")
+                if 'ID' in df_exibir.columns:
+                    lancamentos_opcoes = []
+                    for idx, row in df_exibir.iterrows():
+                        valor = row['ENTRADA'] if row['ENTRADA'] > 0 else row['SAÍDA']
+                        descricao = f"{row['DATA']} - {row['HISTÓRICO']} - R$ {valor:,.2f}"
+                        lancamentos_opcoes.append((row['ID'], descricao))
+                    if lancamentos_opcoes:
+                        lancamento_selecionado = st.selectbox(
+                            "Selecione o lançamento para editar/excluir:",
+                            options=lancamentos_opcoes,
+                            format_func=lambda x: x[1]
+                        )
+                        if lancamento_selecionado:
+                            lancamento_id = lancamento_selecionado[0]
+                            lancamento_data = df_exibir[df_exibir['ID'] == lancamento_id].iloc[0]
+                            col_edit, col_del = st.columns([3, 1])
+                            with col_edit:
+                                with st.form("form_editar_lancamento"):
+                                    st.write("Editar Lançamento:")
+                                    col6, col7, col8 = st.columns([2, 2, 1])
+                                    with col6:
+                                        try:
+                                            data_editar = st.date_input(
+                                                "Data",
+                                                value=datetime.strptime(str(lancamento_data['DATA']), '%Y-%m-%d').date()
+                                                if isinstance(lancamento_data['DATA'], str)
+                                                else lancamento_data['DATA'].date(),
+                                                min_value=date(1900, 1, 1),
+                                                max_value=date(2100, 12, 31)
+                                            )
+                                        except Exception:
+                                            data_editar = st.date_input(
+                                                "Data", 
+                                                value=datetime.now().date(),
+                                                min_value=date(1900, 1, 1),
+                                                max_value=date(2100, 12, 31)
+                                            )
+                                        historico_editar = st.text_input("Histórico", value=lancamento_data['HISTÓRICO'])
+                                    with col7:
+                                        complemento_editar = st.text_input("Complemento", value=lancamento_data['COMPLEMENTO'] if pd.notna(lancamento_data['COMPLEMENTO']) else "")
+                                        if lancamento_data['ENTRADA'] > 0:
+                                            entrada_editar = st.number_input("Valor Entrada (R$)", value=float(lancamento_data['ENTRADA']), min_value=0.0, step=0.01, format="%.2f")
+                                            saida_editar = 0.0
+                                        else:
+                                            saida_editar = st.number_input("Valor Saída (R$)", value=float(lancamento_data['SAÍDA']), min_value=0.0, step=0.01, format="%.2f")
+                                            entrada_editar = 0.0
+                                    with col8:
+                                        submitted_editar = st.form_submit_button("💾 Atualizar", use_container_width=True)
+                                    if submitted_editar and historico_editar:
+                                        if atualizar_lancamento(lancamento_id, mes_selecionado, data_editar, historico_editar, complemento_editar, entrada_editar, saida_editar):
+                                            st.success("✅ Lançamento atualizado com sucesso!")
+                                            st.rerun()
+                            with col_del:
+                                st.write("Excluir:")
+                                if st.button("🗑️ Excluir", use_container_width=True, type="secondary"):
+                                    if st.checkbox("✅ Confirmar exclusão"):
+                                        if excluir_lancamento(lancamento_id, mes_selecionado):
+                                            st.success("✅ Lançamento excluído com sucesso!")
+                                            st.rerun()
+            # Estatísticas do mês
+            st.subheader("📊 Estatísticas do Mês")
+            col9, col10, col11 = st.columns(3)
+            total_entradas = df_mes['entrada'].sum() if 'entrada' in df_mes.columns else 0.0
+            total_saidas = df_mes['saida'].sum() if 'saida' in df_mes.columns else 0.0
+            if 'saldo' in df_mes.columns and len(df_mes) > 0:
+                saldo_atual = df_mes.iloc[-1]['saldo']
+            else:
+                saldo_atual = 0.0
+            with col9:
+                st.metric("💰 Total de Entradas", f"R$ {total_entradas:,.2f}")
+            with col10:
+                st.metric("💸 Total de Saídas", f"R$ {total_saidas:,.2f}")
+            with col11:
+                st.metric("🏦 Saldo Atual", f"R$ {saldo_atual:,.2f}")
+        else:
+            st.warning("⚠️ Estrutura de dados incompatível.")
+            st.dataframe(df_mes, use_container_width=True)
+    else:
+        st.info(f"📭 Nenhum lançamento encontrado para {mes_selecionado}")
+    if user_can_edit():
+        if st.button(f"🗑️ Limpar TODOS os Lançamentos de {mes_selecionado}", use_container_width=True, type="secondary"):
+            if st.checkbox("✅ Confirmar exclusão de TODOS os lançamentos"):
+                limpar_lancamentos_mes(mes_selecionado)
+                st.rerun()
+
+# ----------------------------
+# PÁGINA: CALENDÁRIO
+# ----------------------------
+elif pagina == "📅 Calendário":
+    st.title("📅 Calendário Programável")
+    hoje = date.today()
+    if 'calendario_ano' not in st.session_state:
+        st.session_state.calendario_ano = hoje.year
+    if 'calendario_mes' not in st.session_state:
+        st.session_state.calendario_mes = hoje.month
+    col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([1, 2, 1, 1])
+    with col_nav1:
+        if st.button("⏮️ Mês Anterior", use_container_width=True):
+            if st.session_state.calendario_mes == 1:
+                st.session_state.calendario_ano -= 1
+                st.session_state.calendario_mes = 12
+            else:
+                st.session_state.calendario_mes -= 1
+            st.rerun()
+    with col_nav2:
+        st.subheader(f"{calendar.month_name[st.session_state.calendario_mes]} de {st.session_state.calendario_ano}")
+    with col_nav3:
+        if st.button("⏭️ Próximo Mês", use_container_width=True):
+            if st.session_state.calendario_mes == 12:
+                st.session_state.calendario_ano += 1
+                st.session_state.calendario_mes = 1
+            else:
+                st.session_state.calendario_mes += 1
+            st.rerun()
+    with col_nav4:
+        if st.button("📅 Hoje", use_container_width=True):
+            st.session_state.calendario_ano = hoje.year
+            st.session_state.calendario_mes = hoje.month
+            st.rerun()
+    eventos_mes = get_eventos_mes(st.session_state.calendario_ano, st.session_state.calendario_mes)
+    calendario = gerar_calendario(st.session_state.calendario_ano, st.session_state.calendario_mes)
+    st.markdown("---")
+    dias_semana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    cols = st.columns(7)
+    for i, dia in enumerate(dias_semana):
+        with cols[i]:
+            st.markdown(f'<div style="text-align: center; font-weight: bold; padding: 10px; background-color: #f0f2f6; border-radius: 5px;">{dia}</div>', unsafe_allow_html=True)
+    for semana in calendario:
+        cols = st.columns(7)
+        for i, dia in enumerate(semana):
+            with cols[i]:
+                if dia:
+                    eventos_dia = eventos_mes[eventos_mes['data_evento'] == dia.strftime('%Y-%m-%d')]
+                    tem_eventos = len(eventos_dia) > 0
+                    estilo_dia = "background-color: #e6f3ff; border: 2px solid #1f77b4;" if dia == hoje else "border: 1px solid #ddd;"
+                    st.markdown(
+                        f'<div style="{estilo_dia} padding: 10px; margin: 2px; border-radius: 5px; text-align: center; min-height: 80px;">'
+                        f'<strong>{dia.day}</strong>'
+                        f"{'<br><span style=\"color: red; font-size: 12px;\">●</span>' if tem_eventos else ''}"
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                    if st.button(f"Selecionar", key=f"dia_{dia}", use_container_width=True):
+                        st.session_state.dia_selecionado = dia
+                else:
+                    st.markdown('<div style="padding: 10px; margin: 2px; border-radius: 5px; min-height: 80px;"></div>', unsafe_allow_html=True)
+    st.markdown("---")
+    col_esq, col_dir = st.columns([1, 1])
+    with col_esq:
+        st.subheader("➕ Adicionar Evento")
+        with st.form("form_evento", clear_on_submit=True):
+            titulo = st.text_input("Título do Evento", placeholder="Reunião, Pagamento, Compromisso...")
+            descricao = st.text_area("Descrição", placeholder="Detalhes do evento...")
+            col_data, col_hora = st.columns(2)
+            with col_data:
+                data_evento = st.date_input(
+                    "Data do Evento", 
+                    value=st.session_state.get('dia_selecionado', hoje),
+                    min_value=date(1900, 1, 1),
+                    max_value=date(2100, 12, 31)
+                )
+            with col_hora:
+                hora_evento = st.time_input("Hora do Evento", value=datetime.now().time())
+            tipo_evento = st.selectbox("Tipo de Evento", options=["Reunião", "Pagamento", "Compromisso", "Lembrete", "Outro"])
+            cor_evento = st.color_picker("Cor do Evento", value="#1f77b4")
+            submitted = st.form_submit_button("💾 Salvar Evento", use_container_width=True)
+            if submitted and titulo:
+                if salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
+                    st.rerun()
+            elif submitted and not titulo:
+                st.warning("Por favor, insira um título para o evento.")
+    with col_dir:
+        st.subheader("📋 Eventos do Mês")
+        if not eventos_mes.empty:
+            for _, evento in eventos_mes.iterrows():
+                hora_exibicao = ""
+                if evento['hora_evento']:
+                    try:
+                        if isinstance(evento['hora_evento'], str):
+                            hora_obj = datetime.strptime(evento['hora_evento'], '%H:%M:%S').time()
+                            hora_exibicao = hora_obj.strftime('%H:%M')
+                        else:
+                            hora_exibicao = str(evento['hora_evento'])
+                    except:
+                        hora_exibicao = str(evento['hora_evento'])
+                display_text = f"📅 {evento['titulo']} - {evento['data_evento']}"
+                if hora_exibicao:
+                    display_text += f" {hora_exibicao}"
+                with st.expander(display_text):
+                    st.write(f"**Descrição:** {evento['descricao']}")
+                    if hora_exibicao:
+                        st.write(f"**Hora:** {hora_exibicao}")
+                    st.write(f"**Tipo:** {evento['tipo_evento']}")
+                    st.write(f"**Criado por:** {evento['created_by']}")
+                    pode_gerenciar = (user_is_admin() or evento['created_by'] == st.session_state.username)
+                    if pode_gerenciar:
+                        col_edit_ev, col_del_ev = st.columns(2)
+                        with col_edit_ev:
+                            if st.button("✏️ Editar", key=f"edit_{evento['id']}", use_container_width=True):
+                                st.session_state.editando_evento = evento['id']
+                                st.rerun()
+                        with col_del_ev:
+                            if st.button("🗑️ Excluir", key=f"del_{evento['id']}", use_container_width=True):
+                                if excluir_evento(evento['id']):
+                                    st.rerun()
+                    else:
+                        st.info("Apenas o criador do evento ou administrador pode editá-lo.")
+    if 'editando_evento' in st.session_state:
+        st.markdown("---")
+        st.subheader("✏️ Editar Evento")
+        evento_id = st.session_state.editando_evento
+        evento_data = eventos_mes[eventos_mes['id'] == evento_id].iloc[0]
+        pode_editar = (user_is_admin() or evento_data['created_by'] == st.session_state.username)
+        if pode_editar:
+            hora_evento_existente = evento_data['hora_evento']
+            if isinstance(hora_evento_existente, str):
+                try:
+                    hora_evento_existente = datetime.strptime(hora_evento_existente, '%H:%M:%S').time()
+                except:
+                    hora_evento_existente = datetime.now().time()
+            with st.form("form_editar_evento"):
+                titulo_edit = st.text_input("Título do Evento", value=evento_data['titulo'])
+                descricao_edit = st.text_area("Descrição", value=evento_data['descricao'])
+                col_data_edit, col_hora_edit = st.columns(2)
+                with col_data_edit:
+                    data_evento_edit = st.date_input(
+                        "Data do Evento",
+                        value=datetime.strptime(evento_data['data_evento'], '%Y-%m-%d').date(),
+                        min_value=date(1900, 1, 1),
+                        max_value=date(2100, 12, 31)
+                    )
+                with col_hora_edit:
+                    hora_evento_edit = st.time_input("Hora do Evento", value=hora_evento_existente)
+                tipo_evento_edit = st.selectbox("Tipo de Evento",
+                                                options=["Reunião", "Pagamento", "Compromisso", "Lembrete", "Outro"],
+                                                index=["Reunião", "Pagamento", "Compromisso", "Lembrete", "Outro"].index(evento_data['tipo_evento']) if evento_data['tipo_evento'] in ["Reunião", "Pagamento", "Compromisso", "Lembrete", "Outro"] else 0)
+                cor_evento_edit = st.color_picker("Cor do Evento", value=evento_data['cor_evento'])
+                col_salvar, col_cancelar = st.columns(2)
+                with col_salvar:
+                    submitted_edit = st.form_submit_button("💾 Atualizar Evento", use_container_width=True)
+                with col_cancelar:
+                    if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                        del st.session_state.editando_evento
+                        st.rerun()
+                if submitted_edit and titulo_edit:
+                    if atualizar_evento(evento_id, titulo_edit, descricao_edit, data_evento_edit, hora_evento_edit, tipo_evento_edit, cor_evento_edit):
+                        del st.session_state.editando_evento
+                        st.rerun()
+                elif submitted_edit and not titulo_edit:
+                    st.warning("Por favor, insira um título para o evento.")
+        else:
+            st.error("Você não tem permissão para editar este evento.")
+            if st.button("⬅️ Voltar"):
+                del st.session_state.editando_evento
+                st.rerun()
+
+# ----------------------------
+# PÁGINA: BALANÇO FINANCEIRO
+# ----------------------------
+elif pagina == "📈 Balanço Financeiro":
+    st.title("📈 Balanço Financeiro")
+    total_entradas_anual = 0.0
+    total_saidas_anual = 0.0
+    dados_mensais = []
+    meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+             "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+    with st.spinner("📊 Calculando balanço..."):
+        for mes in meses:
+            df_mes = get_lancamentos_mes(mes)
+            if not df_mes.empty:
+                entradas_mes = df_mes['entrada'].sum() if 'entrada' in df_mes.columns else 0.0
+                saidas_mes = df_mes['saida'].sum() if 'saida' in df_mes.columns else 0.0
+                if 'saldo' in df_mes.columns and len(df_mes) > 0:
+                    saldo_mes = df_mes.iloc[-1]['saldo']
+                else:
+                    saldo_mes = 0.0
+                total_entradas_anual += entradas_mes
+                total_saidas_anual += saidas_mes
+                dados_mensais.append({
+                    'Mês': mes,
+                    'Entradas': entradas_mes,
+                    'Saídas': saidas_mes,
+                    'Saldo': saldo_mes
+                })
+    saldo_final_anual = total_entradas_anual - total_saidas_anual
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📥 Débitos")
+        st.metric("Total de Entradas Anual", f"R$ {total_entradas_anual:,.2f}")
+        st.subheader("Resumo por Mês")
+        for dados in dados_mensais:
+            with st.expander(f"{dados['Mês']}"):
+                st.write(f"Entradas: R$ {dados['Entradas']:,.2f}")
+                st.write(f"Saídas: R$ {dados['Saídas']:,.2f}")
+                st.write(f"Saldo: R$ {dados['Saldo']:,.2f}")
+    with col2:
+        st.subheader("📤 Créditos")
+        st.metric("Total de Saídas Anual", f"R$ {total_saidas_anual:,.2f}")
+        st.metric("Saldo Final Anual", f"R$ {saldo_final_anual:,.2f}", delta=f"R$ {saldo_final_anual:,.2f}")
+        if dados_mensais:
+            st.subheader("📊 Resumo Visual")
+            df_grafico = pd.DataFrame(dados_mensais)
+            st.bar_chart(df_grafico.set_index('Mês')[['Entradas', 'Saídas']], use_container_width=True)
+
+# ----------------------------
+# PÁGINA: EXPORTAR DADOS
+# ----------------------------
+elif pagina == "💾 Exportar Dados":
+    st.title("💾 Exportar Dados")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📤 Exportar Dados")
+        st.info("Os arquivos CSV podem ser abertos diretamente no Excel")
+        st.subheader("📥 Download por Mês")
+        meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        mes_download = st.selectbox("Selecione o mês para download:", meses)
+        csv_data = download_csv_mes(mes_download)
+        if csv_data:
+            st.download_button(
+                label=f"💾 Baixar {mes_download} em CSV",
+                data=csv_data,
+                file_name=f"livro_caixa_{mes_download}_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.warning(f"📭 Nenhum dado encontrado para {mes_download}")
+        st.markdown("---")
+        st.subheader("📦 Exportação Completa")
+        if st.button("📦 Exportar Todos os Dados", use_container_width=True):
+            with st.spinner("Gerando arquivo ZIP..."):
+                output = exportar_para_csv()
+                if output is not None:
+                    st.download_button(
+                        label="💾 Baixar Arquivo ZIP Completo",
+                        data=output,
+                        file_name=f"livro_caixa_completo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                    st.success("✅ Arquivo ZIP gerado com sucesso!")
+                else:
+                    st.error("❌ Erro ao gerar arquivo de exportação")
+    with col2:
+        st.subheader("📊 Informações do Sistema")
+        conn = get_db_connection()
+        try:
+            if conn:
+                total_lancamentos = pd.read_sql("SELECT COUNT(*) as total FROM lancamentos", conn).iloc[0]['total']
+                total_contas = pd.read_sql("SELECT COUNT(*) as total FROM contas", conn).iloc[0]['total']
+                meses_com_dados = pd.read_sql("SELECT COUNT(DISTINCT mes) as total FROM lancamentos", conn).iloc[0]['total']
+                total_eventos = pd.read_sql("SELECT COUNT(*) as total FROM eventos_calendario", conn).iloc[0]['total']
+            else:
+                total_lancamentos = 0
+                total_contas = 0
+                meses_com_dados = 0
+                total_eventos = 0
+        except:
+            total_lancamentos = 0
+            total_contas = 0
+            meses_com_dados = 0
+            total_eventos = 0
+        finally:
+            if conn:
+                conn.close()
+        st.metric("Total de Lançamentos", total_lancamentos)
+        st.metric("Total de Contas", total_contas)
+        st.metric("Meses com Dados", meses_com_dados)
+        st.metric("Total de Eventos", total_eventos)
+        st.info("""
+        Informações:
+        - Banco de Dados: PlanetScale (MySQL)
+        - Dados: Persistidos na nuvem
+        - Exportação: CSV compatível com Excel
+        - Segurança: Acesso por login
+        """)
 
 # RODAPÉ
 st.markdown("---")
