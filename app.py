@@ -824,16 +824,6 @@ elif menu_choice == "💽 Criar Backup":
     st.write("Página de Backup")
 st.markdown("---")
 
-#opcoes_menu = [
-#    "📋 Ajuda",
- #   "👥 Gerenciar Usuários",
-  #  "📝 Contas",
-   # "📥 Lançamentos",
-    #"📅 Calendário",
-    "📈 Balanço Financeiro",
-    #"💾 Exportar Dados"
-]
-
 #pagina = st.radio("**Navegação:**", opcoes_menu, label_visibility="collapsed")
 
 # ----------------------------
