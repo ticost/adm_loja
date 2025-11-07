@@ -337,8 +337,11 @@ finally:
     if conn:
         conn.close()
 
-def change_password(username, new_password):
-"""Altera senha do usuário"""
+def alterar_senha():
+    """Altera senha do usuário"""
+    pass
+
+
 conn = get_db_connection()
 if not conn:
     return False, "Erro de conexão"
