@@ -864,7 +864,8 @@ st.stop()
 # Se chegou aqui, os secrets existem - testar conexão
 conn = get_db_connection()
 if not conn:
-st.error("❌ Falha na conexão. Verifique as configurações.")
+    st.error("❌ Falha na conexão. Verifique as configurações.")
+
 pagina_configuracao()
 st.stop()
 else:
