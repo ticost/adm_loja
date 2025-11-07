@@ -505,8 +505,10 @@ finally:
     if conn:
         conn.close()
 
-def atualizar_lancamento(lancamento_id, mes, data, historico, complemento, entrada, saida):
-"""Atualiza lançamento existente"""
+def update_transaction():
+    """Atualiza lançamento existente"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
