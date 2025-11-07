@@ -462,8 +462,10 @@ finally:
     if conn:
         conn.close()
 
-def get_lancamentos_mes(mes):
-"""Busca lançamentos do mês"""
+def get_month_transactions():
+    """Busca lançamentos do mês"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return pd.DataFrame()
