@@ -941,7 +941,7 @@ with st.sidebar:
 # Carrega a imagem do logo
 logo_carregado = carregar_imagem_logo("Logo_Loja.png")
 
-st.title("📒 Livro Caixa")
+    st.title("📒 Livro Caixa")
 
 # Informações do usuário logado
 st.sidebar.markdown("---")
