@@ -650,8 +650,10 @@ def generate_calendar_matrix():
 cal = calendar.Calendar(firstweekday=6)  # Domingo como primeiro dia
 return cal.monthdatescalendar(ano, mes)
 
-def salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
-"""Salva novo evento"""
+def create_event():
+    """Salva novo evento"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return False
