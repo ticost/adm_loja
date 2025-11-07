@@ -263,7 +263,9 @@ finally:
 
 
 def get_all_users():
-"""Busca todos os usuários (apenas admin)"""
+    """Busca todos os usuários (apenas admin)"""
+    pass
+
 if not user_is_admin():
     return []
 
