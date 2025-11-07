@@ -1074,7 +1074,7 @@ with col2:
 # =============================================================================
 
 elif pagina == "👥 Gerenciar Usuários":
-st.title("👥 Gerenciar Usuários")
+    st.title("👥 Gerenciar Usuários")
 
 if not user_is_admin():
     st.error("❌ Acesso restrito - Apenas administradores podem gerenciar usuários")
