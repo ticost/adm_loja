@@ -879,6 +879,10 @@ else:
 # =============================================================================
 
 # Verificar se o usuário está logado
+if st.button("🔒 Logout"):
+    st.session_state.logged_in = False
+    st.rerun()
+    
 if 'logged_in' not in st.session_state:
 st.session_state.logged_in = False
 st.session_state.username = None
