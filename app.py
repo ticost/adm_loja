@@ -1054,73 +1054,55 @@ elif pagina == "👥 Gerenciar Usuários":
                     else:
                         st.error(f"❌ {message}")
     
-    with tab2:
-        st.subheader("✏️ Editar Permissões de Usuários")
-        
-        users = get_all_users()
-        if users:
-            st.write("**Usuários cadastrados:**")
-            
-            for i, (username, email, permissao, created_at) in enumerate(users, 1):
-                col1, col2, col3, col4 = st.columns([3, 3, 2, 1])
-                with col1:
-                    st.write(f"**{username}** - 📧 {email}")
-
-                
-                with col2:
-                    st.write(PERMISSOES.get(permissao, 'Desconhecida'))
-                
-                with col3:
-                    # Evitar que admin edite sua própria permissão
-                    if username != st.session_state.username:
-                        nova_permissao = st.selectbox(
-                            f"Permissão para {username}",
-                            options=list(PERMISSOES.keys()),
-                            index=list(PERMISSOES.keys()).index(permissao),
-                            format_func=lambda x: PERMISSOES[x],
-                            key=f"perm_{username}"
-                        )
-                    else:
-                        st.info("👑 Administrador")
-                        nova_permissao = permissao
-                
-                with col4:
-                    if username != st.session_state.username and nova_permissao != permissao:
-                        if st.button("💾", key=f"save_{username}", use_container_width=True):
-                            success, message = update_user_permission(username, nova_permissao)
-                            if success:
-                                st.success(message)
-                                st.rerun()
-                            else:
-                                st.error(message)
-                
-                st.markdown("---")
-        else:
-            st.info("📭 Nenhum usuário cadastrado.")
-    
-        with tab3:
+        with tab2:
             users = get_all_users()
             if users:
                 for username, email, permissao, created_at in users:
+                    col1, col2, col3, col4 = st.columns([3, 3, 2, 1])
+                    with col1:
+                        st.write(f"**{username}** - 📧 {email}")
+                    with col2:
+                        st.write(PERMISSOES.get(permissao, 'Desconhecida'))
                     if username != st.session_state.username:
-                        col1, col2, col3 = st.columns([3, 2, 1])
-                        with col1:
-                            st.write(f"**{username}** - 📧 {email}")
-                        with col2:
-                            st.write(PERMISSOES.get(permissao, 'Desconhecida'))
-                        with col3:
-                            if st.button("🗑️ Excluir", key=f"del_{username}"):
-                                success, msg = delete_user(username)
-                                if success:
-                                    st.success(msg)
-                                    st.rerun()
-                                else:
-                                    st.error(msg)
+                        nova_perm = col3.selectbox(
+                            "Nova Permissão",
+                            list(PERMISSOES.keys()),
+                            index=list(PERMISSOES.keys()).index(permissao),
+                            key=f"perm_{username}"
+                        )
+                    if col4.button("💾", key=f"save_{username}"):
+                        success, msg = update_user_permission(username, nova_perm)
+                        if success:
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(msg)
             else:
                 st.info("Nenhum usuário encontrado.")
 
+    with tab3:
+        users = get_all_users()
+        if users:
+            for username, email, permissao, created_at in users:
+                if username != st.session_state.username:
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    with col1:
+                        st.write(f"**{username}** - 📧 {email}")
+                    with col2:
+                        st.write(PERMISSOES.get(permissao, 'Desconhecida'))
+                    with col3:
+                        if st.button("🗑️ Excluir", key=f"del_{username}"):
+                            success, msg = delete_user(username)
+                            if success:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
         else:
-            st.info("📭 Nenhum usuário para excluir.")
+            st.info("Nenhum usuário encontrado.")
+
+else:
+    st.info("📭 Nenhum usuário para excluir.")
 
     # Estatísticas de usuários
     st.markdown("---")
