@@ -643,8 +643,10 @@ finally:
     if conn:
         conn.close()
 
-def gerar_calendario(ano, mes):
-"""Gera matriz do calendário"""
+def generate_calendar_matrix():
+    """Gera matriz do calendário"""
+    pass
+
 cal = calendar.Calendar(firstweekday=6)  # Domingo como primeiro dia
 return cal.monthdatescalendar(ano, mes)
 
