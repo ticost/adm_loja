@@ -1073,7 +1073,7 @@ with col2:
 # PÁGINA: GERENCIAR USUÁRIOS
 # =============================================================================
 
-elif pagina == "👥 Gerenciar Usuários":
+if pagina == "👥 Gerenciar Usuários":
     st.title("👥 Gerenciar Usuários")
 
 if not user_is_admin():
