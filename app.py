@@ -722,8 +722,10 @@ finally:
     if conn:
         conn.close()
 
-def download_csv_mes(mes):
-"""Gera CSV do mês"""
+def export_month_csv():
+    """Gera CSV do mês"""
+    pass
+
 df = get_lancamentos_mes(mes)
 if df.empty:
     return None
