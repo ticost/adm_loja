@@ -939,8 +939,8 @@ st.stop()
 # Sidebar com logo e informações do usuário
 with st.sidebar:
 # Carrega a imagem do logo
-logo_carregado = carregar_imagem_logo("Logo_Loja.png")
-
+    logo_carregado = carregar_imagem_logo("Logo_Loja.png")
+    st.image(logo_carregado, width=180)
     st.title("📒 Livro Caixa")
 
 # Informações do usuário logado
