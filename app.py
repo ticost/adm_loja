@@ -1,4 +1,4 @@
-# app.py - SISTEMA COMPLETO LIVRO CAIXA COM USUARIOS EXPANDIDOS
+# app.py - SISTEMA COMPLETO LIVRO CAIXA COM USUARIOS EXPANDIDOS E BACKUP
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, time
@@ -146,7 +146,6 @@ def init_auth_db():
             if campo not in colunas_existentes:
                 try:
                     cursor.execute(f'ALTER TABLE usuarios ADD COLUMN {campo} {tipo}')
-                    st.success(f"✅ Coluna '{campo}' adicionada com sucesso!")
                 except Exception as e:
                     st.warning(f"⚠️ Não foi possível adicionar a coluna '{campo}': {e}")
 
@@ -167,7 +166,6 @@ def init_auth_db():
             )
 
         conn.commit()
-        st.success("✅ Tabela de usuários inicializada/atualizada com sucesso!")
     except Error as e:
         st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
     finally:
@@ -295,6 +293,100 @@ def get_all_users():
         return cursor.fetchall()
     except Error:
         return []
+    finally:
+        if conn:
+            conn.close()
+
+def get_user_by_username(username):
+    """Busca um usuário específico pelo username"""
+    conn = get_db_connection()
+    if not conn:
+        return None
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT username, email, permissao, created_at,
+                   nome_completo, telefone, endereco,
+                   data_aniversario, data_iniciacao, data_elevacao,
+                   data_exaltacao, data_instalacao_posse, observacoes, redes_sociais
+            FROM usuarios WHERE username = %s
+        ''', (username,))
+        return cursor.fetchone()
+    except Error:
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def update_user(username, email=None, permissao=None, nome_completo=None, 
+                telefone=None, endereco=None, data_aniversario=None, 
+                data_iniciacao=None, data_elevacao=None, data_exaltacao=None, 
+                data_instalacao_posse=None, observacoes=None, redes_sociais=None):
+    """Atualiza todos os campos de um usuário"""
+    if not user_is_admin():
+        return False, "Apenas administradores podem atualizar usuários"
+
+    conn = get_db_connection()
+    if not conn:
+        return False, "Erro de conexão"
+
+    try:
+        cursor = conn.cursor()
+        
+        # Construir a query dinamicamente baseada nos campos fornecidos
+        fields = []
+        values = []
+        
+        if email is not None:
+            fields.append("email = %s")
+            values.append(email)
+        if permissao is not None:
+            fields.append("permissao = %s")
+            values.append(permissao)
+        if nome_completo is not None:
+            fields.append("nome_completo = %s")
+            values.append(nome_completo)
+        if telefone is not None:
+            fields.append("telefone = %s")
+            values.append(telefone)
+        if endereco is not None:
+            fields.append("endereco = %s")
+            values.append(endereco)
+        if data_aniversario is not None:
+            fields.append("data_aniversario = %s")
+            values.append(data_aniversario)
+        if data_iniciacao is not None:
+            fields.append("data_iniciacao = %s")
+            values.append(data_iniciacao)
+        if data_elevacao is not None:
+            fields.append("data_elevacao = %s")
+            values.append(data_elevacao)
+        if data_exaltacao is not None:
+            fields.append("data_exaltacao = %s")
+            values.append(data_exaltacao)
+        if data_instalacao_posse is not None:
+            fields.append("data_instalacao_posse = %s")
+            values.append(data_instalacao_posse)
+        if observacoes is not None:
+            fields.append("observacoes = %s")
+            values.append(observacoes)
+        if redes_sociais is not None:
+            fields.append("redes_sociais = %s")
+            values.append(redes_sociais)
+        
+        if not fields:
+            return False, "Nenhum campo para atualizar"
+        
+        values.append(username)
+        query = f"UPDATE usuarios SET {', '.join(fields)} WHERE username = %s"
+        
+        cursor.execute(query, values)
+        conn.commit()
+        return True, "Usuário atualizado com sucesso"
+        
+    except Error as e:
+        return False, f"Erro ao atualizar usuário: {e}"
     finally:
         if conn:
             conn.close()
@@ -681,6 +773,9 @@ def exportar_para_csv():
                     df_eventos = pd.read_sql("SELECT * FROM eventos_calendario", conn)
                     if not df_eventos.empty:
                         zip_file.writestr("eventos.csv", df_eventos.to_csv(index=False, encoding='utf-8'))
+                    df_usuarios = pd.read_sql("SELECT username, email, permissao, nome_completo, telefone, endereco, data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, data_instalacao_posse, observacoes, redes_sociais, created_at FROM usuarios", conn)
+                    if not df_usuarios.empty:
+                        zip_file.writestr("usuarios.csv", df_usuarios.to_csv(index=False, encoding='utf-8'))
                 finally:
                     conn.close()
         zip_buffer.seek(0)
@@ -690,7 +785,149 @@ def exportar_para_csv():
         return None
 
 # =============================================================================
-# PÁGINAS E INTERFACE (LOGIN, SIDEBAR, MENU) - com usuários expandidos
+# FUNÇÕES DE BACKUP
+# =============================================================================
+
+def criar_backup_completo():
+    """Cria um backup completo de todos os dados do sistema"""
+    try:
+        # Criar arquivo ZIP em memória
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+            # Backup de lançamentos por mês
+            meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+            
+            for mes in meses:
+                df_mes = get_lancamentos_mes(mes)
+                if not df_mes.empty:
+                    csv_data = df_mes.to_csv(index=False, encoding='utf-8')
+                    zip_file.writestr(f"backup_lancamentos_{mes}.csv", csv_data)
+            
+            # Backup de todas as tabelas
+            conn = get_db_connection()
+            if conn:
+                try:
+                    # Backup de contas
+                    df_contas = pd.read_sql("SELECT * FROM contas", conn)
+                    if not df_contas.empty:
+                        zip_file.writestr("backup_contas.csv", df_contas.to_csv(index=False, encoding='utf-8'))
+                    
+                    # Backup de eventos
+                    df_eventos = pd.read_sql("SELECT * FROM eventos_calendario", conn)
+                    if not df_eventos.empty:
+                        zip_file.writestr("backup_eventos.csv", df_eventos.to_csv(index=False, encoding='utf-8'))
+                    
+                    # Backup de usuários (sem senha)
+                    df_usuarios = pd.read_sql('''
+                        SELECT username, email, permissao, nome_completo, telefone, endereco, 
+                               data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, 
+                               data_instalacao_posse, observacoes, redes_sociais, created_at 
+                        FROM usuarios
+                    ''', conn)
+                    if not df_usuarios.empty:
+                        zip_file.writestr("backup_usuarios.csv", df_usuarios.to_csv(index=False, encoding='utf-8'))
+                    
+                    # Backup de estrutura das tabelas
+                    cursor = conn.cursor()
+                    cursor.execute("SHOW TABLES")
+                    tables = cursor.fetchall()
+                    
+                    estrutura_sql = ""
+                    for table in tables:
+                        table_name = table[0]
+                        cursor.execute(f"SHOW CREATE TABLE {table_name}")
+                        create_table = cursor.fetchone()
+                        if create_table:
+                            estrutura_sql += f"-- Estrutura da tabela {table_name}\n"
+                            estrutura_sql += create_table[1] + ";\n\n"
+                    
+                    zip_file.writestr("estrutura_tabelas.sql", estrutura_sql)
+                    
+                finally:
+                    conn.close()
+            
+            # Adicionar informações do backup
+            info_backup = f"""
+            BACKUP DO SISTEMA LIVRO CAIXA
+            Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            Usuário: {st.session_state.username}
+            Permissão: {st.session_state.permissao}
+            
+            Conteúdo do backup:
+            - Lançamentos mensais
+            - Contas cadastradas
+            - Eventos do calendário
+            - Usuários (sem senhas)
+            - Estrutura das tabelas
+            
+            Este arquivo contém todos os dados do sistema para restauração.
+            """
+            zip_file.writestr("INFO_BACKUP.txt", info_backup)
+        
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue()
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao criar backup: {e}")
+        return None
+
+def criar_backup_incremental():
+    """Cria backup apenas dos dados recentes (últimos 30 dias)"""
+    try:
+        zip_buffer = io.BytesIO()
+        data_limite = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        
+        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+            conn = get_db_connection()
+            if conn:
+                try:
+                    # Backup de lançamentos recentes
+                    query_lancamentos = f"""
+                        SELECT * FROM lancamentos 
+                        WHERE created_at >= '{data_limite}' 
+                        ORDER BY data, id
+                    """
+                    df_lancamentos = pd.read_sql(query_lancamentos, conn)
+                    if not df_lancamentos.empty:
+                        zip_file.writestr("backup_incremental_lancamentos.csv", df_lancamentos.to_csv(index=False, encoding='utf-8'))
+                    
+                    # Backup de eventos recentes
+                    query_eventos = f"""
+                        SELECT * FROM eventos_calendario 
+                        WHERE created_at >= '{data_limite}' 
+                        ORDER BY data_evento, hora_evento
+                    """
+                    df_eventos = pd.read_sql(query_eventos, conn)
+                    if not df_eventos.empty:
+                        zip_file.writestr("backup_incremental_eventos.csv", df_eventos.to_csv(index=False, encoding='utf-8'))
+                    
+                finally:
+                    conn.close()
+            
+            # Informações do backup incremental
+            info_backup = f"""
+            BACKUP INCREMENTAL - SISTEMA LIVRO CAIXA
+            Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            Período: Últimos 30 dias (a partir de {data_limite})
+            Usuário: {st.session_state.username}
+            
+            Conteúdo:
+            - Lançamentos recentes
+            - Eventos recentes
+            """
+            zip_file.writestr("INFO_BACKUP_INCREMENTAL.txt", info_backup)
+        
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue()
+        
+    except Exception as e:
+        st.error(f"❌ Erro ao criar backup incremental: {e}")
+        return None
+
+# =============================================================================
+# PÁGINAS E INTERFACE (LOGIN, SIDEBAR, MENU)
 # =============================================================================
 
 # Inicialização do estado da sessão
@@ -798,7 +1035,8 @@ opcoes_menu = [
     "📥 Lançamentos", 
     "📅 Calendário", 
     "📈 Balanço Financeiro", 
-    "💾 Exportar Dados"
+    "💾 Exportar Dados",
+    "💽 Criar Backup"
 ]
 
 pagina = st.sidebar.radio("**Navegação:**", opcoes_menu)
@@ -827,13 +1065,14 @@ if pagina == "📋 Ajuda":
         - ✅ **Calendário Programável**: Agende eventos e compromissos
         - ✅ **Relatórios**: Balanço financeiro com gráficos
         - ✅ **Exportação**: Backup dos dados em CSV
+        - ✅ **Backup Completo**: Criação de backups completos do sistema
         """)
     with col2:
         st.subheader("💡 Dicas")
         st.markdown("Use as permissões para controlar quem edita e quem apenas visualiza.")
 
 # ----------------------------
-# PÁGINA: GERENCIAR USUÁRIOS (COM CORREÇÕES NAS ABAS DE EDIÇÃO E EXCLUSÃO)
+# PÁGINA: GERENCIAR USUÁRIOS (COM EDIÇÃO COMPLETA)
 # ----------------------------
 elif pagina == "👥 Gerenciar Usuários":
     st.title("👥 Gerenciar Usuários")
@@ -842,7 +1081,7 @@ elif pagina == "👥 Gerenciar Usuários":
         st.error("❌ Acesso restrito - Apenas administradores podem gerenciar usuários")
         st.stop()
 
-    tab1, tab2, tab3 = st.tabs(["➕ Criar Usuário", "✏️ Editar Permissões", "🗑️ Excluir Usuários"])
+    tab1, tab2, tab3, tab4 = st.tabs(["➕ Criar Usuário", "✏️ Editar Usuários", "👁️ Visualizar Usuários", "🗑️ Excluir Usuários"])
 
     with tab1:
         st.subheader("➕ Criar Novo Usuário")
@@ -935,7 +1174,7 @@ elif pagina == "👥 Gerenciar Usuários":
                         st.error(message)
 
     with tab2:
-        st.subheader("✏️ Editar Permissões de Usuários")
+        st.subheader("✏️ Editar Usuários")
         
         # Buscar usuários
         users = get_all_users()
@@ -951,56 +1190,158 @@ elif pagina == "👥 Gerenciar Usuários":
                 email = user[1]
                 permissao_atual = user[2]
                 created_at = user[3]
-                nome_completo = user[4]
-                telefone = user[5]
-                endereco = user[6]
+                nome_completo = user[4] or ""
+                telefone = user[5] or ""
+                endereco = user[6] or ""
+                data_aniversario = user[7]
+                data_iniciacao = user[8]
+                data_elevacao = user[9]
+                data_exaltacao = user[10]
+                data_instalacao_posse = user[11]
+                observacoes = user[12] or ""
+                redes_sociais = user[13] or ""
                 
                 # Criar container para cada usuário
-                with st.container():
-                    col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-                    
-                    with col1:
-                        st.write(f"**{username}**")
-                        if nome_completo:
-                            st.write(f"👤 {nome_completo}")
-                        if email:
-                            st.write(f"📧 {email}")
-                    
-                    with col2:
-                        st.write(f"**Permissão atual:**")
-                        st.write(PERMISSOES.get(permissao_atual, 'Desconhecida'))
-                    
-                    with col3:
-                        # Apenas permitir edição de outros usuários, não do próprio
-                        if username != st.session_state.username:
+                with st.expander(f"✏️ Editar {username}", expanded=False):
+                    with st.form(f"form_editar_{username}_{i}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write(f"**Editando usuário:** {username}")
+                            novo_email = st.text_input("E-mail", value=email or "", key=f"email_{username}_{i}")
                             nova_permissao = st.selectbox(
-                                "Nova permissão:",
+                                "Permissão",
                                 options=list(PERMISSOES.keys()),
                                 index=list(PERMISSOES.keys()).index(permissao_atual) if permissao_atual in PERMISSOES else 0,
-                                key=f"edit_perm_{username}_{i}"
+                                key=f"perm_{username}_{i}"
                             )
-                        else:
-                            st.write("👤 **Você**")
-                            nova_permissao = permissao_atual
-                    
-                    with col4:
-                        if username != st.session_state.username:
-                            if st.button("💾 Salvar", key=f"save_{username}_{i}", use_container_width=True):
-                                if nova_permissao != permissao_atual:
-                                    success, message = update_user_permission(username, nova_permissao)
+                            novo_nome_completo = st.text_input("Nome Completo", value=nome_completo, key=f"nome_{username}_{i}")
+                            novo_telefone = st.text_input("Telefone", value=telefone, key=f"tel_{username}_{i}")
+                            novo_endereco = st.text_area("Endereço", value=endereco, key=f"end_{username}_{i}")
+                        
+                        with col2:
+                            nova_data_aniversario = st.date_input(
+                                "Data de Aniversário",
+                                value=data_aniversario,
+                                min_value=date(1900, 1, 1),
+                                max_value=date(2100, 12, 31),
+                                key=f"aniv_{username}_{i}"
+                            )
+                            nova_data_iniciacao = st.date_input(
+                                "Data de Iniciação",
+                                value=data_iniciacao,
+                                min_value=date(1900, 1, 1),
+                                max_value=date(2100, 12, 31),
+                                key=f"inic_{username}_{i}"
+                            )
+                            nova_data_elevacao = st.date_input(
+                                "Data de Elevação",
+                                value=data_elevacao,
+                                min_value=date(1900, 1, 1),
+                                max_value=date(2100, 12, 31),
+                                key=f"elev_{username}_{i}"
+                            )
+                            nova_data_exaltacao = st.date_input(
+                                "Data de Exaltação",
+                                value=data_exaltacao,
+                                min_value=date(1900, 1, 1),
+                                max_value=date(2100, 12, 31),
+                                key=f"exal_{username}_{i}"
+                            )
+                            nova_data_instalacao_posse = st.date_input(
+                                "Data de Instalação/Posse",
+                                value=data_instalacao_posse,
+                                min_value=date(1900, 1, 1),
+                                max_value=date(2100, 12, 31),
+                                key=f"inst_{username}_{i}"
+                            )
+                            novas_observacoes = st.text_area("Observações", value=observacoes, key=f"obs_{username}_{i}")
+                            novas_redes_sociais = st.text_input("Redes Sociais", value=redes_sociais, key=f"redes_{username}_{i}")
+                        
+                        # Botão de atualização
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            if st.form_submit_button("💾 Atualizar Usuário", use_container_width=True):
+                                if username != st.session_state.username:
+                                    success, message = update_user(
+                                        username=username,
+                                        email=novo_email if novo_email != email else None,
+                                        permissao=nova_permissao if nova_permissao != permissao_atual else None,
+                                        nome_completo=novo_nome_completo if novo_nome_completo != nome_completo else None,
+                                        telefone=novo_telefone if novo_telefone != telefone else None,
+                                        endereco=novo_endereco if novo_endereco != endereco else None,
+                                        data_aniversario=nova_data_aniversario if nova_data_aniversario != data_aniversario else None,
+                                        data_iniciacao=nova_data_iniciacao if nova_data_iniciacao != data_iniciacao else None,
+                                        data_elevacao=nova_data_elevacao if nova_data_elevacao != data_elevacao else None,
+                                        data_exaltacao=nova_data_exaltacao if nova_data_exaltacao != data_exaltacao else None,
+                                        data_instalacao_posse=nova_data_instalacao_posse if nova_data_instalacao_posse != data_instalacao_posse else None,
+                                        observacoes=novas_observacoes if novas_observacoes != observacoes else None,
+                                        redes_sociais=novas_redes_sociais if novas_redes_sociais != redes_sociais else None
+                                    )
                                     if success:
-                                        st.success(f"✅ Permissão de {username} atualizada para {PERMISSOES[nova_permissao]}")
+                                        st.success(f"✅ Usuário {username} atualizado com sucesso!")
                                         st.rerun()
                                     else:
                                         st.error(f"❌ {message}")
                                 else:
-                                    st.info("ℹ️ Nenhuma alteração realizada")
-                        else:
-                            st.write("")
-                    
-                    st.markdown("---")
+                                    st.warning("⚠️ Você não pode editar seu próprio usuário aqui. Use a opção 'Alterar Senha' na sidebar.")
+                        
+                        with col_btn2:
+                            if st.form_submit_button("🔄 Redefinir Senha", use_container_width=True):
+                                if username != st.session_state.username:
+                                    nova_senha = "123456"  # Senha padrão
+                                    success, message = change_password(username, nova_senha)
+                                    if success:
+                                        st.success(f"✅ Senha de {username} redefinida para '123456'")
+                                    else:
+                                        st.error(f"❌ {message}")
+                                else:
+                                    st.warning("⚠️ Você não pode redefinir sua própria senha aqui. Use a opção 'Alterar Senha' na sidebar.")
 
     with tab3:
+        st.subheader("👁️ Visualizar Usuários")
+        
+        # Buscar usuários
+        users = get_all_users()
+        
+        if not users:
+            st.info("📭 Nenhum usuário cadastrado no sistema.")
+        else:
+            # Criar DataFrame para exibição
+            df_usuarios = pd.DataFrame(users, columns=[
+                "Username", "Email", "Permissão", "Data Criação",
+                "Nome Completo", "Telefone", "Endereço",
+                "Data Aniversário", "Data Iniciação", "Data Elevação",
+                "Data Exaltação", "Data Instalação/Posse", "Observações", "Redes Sociais"
+            ])
+            
+            # Formatar datas
+            date_columns = ["Data Criação", "Data Aniversário", "Data Iniciação", "Data Elevação", "Data Exaltação", "Data Instalação/Posse"]
+            for col in date_columns:
+                if col in df_usuarios.columns:
+                    df_usuarios[col] = pd.to_datetime(df_usuarios[col], errors='coerce').dt.strftime('%d/%m/%Y')
+            
+            # Exibir tabela
+            st.dataframe(df_usuarios, use_container_width=True, hide_index=True)
+            
+            # Estatísticas
+            st.subheader("📊 Estatísticas de Usuários")
+            total_usuarios = len(users)
+            admin_count = sum(1 for user in users if user[2] == 'admin')
+            editor_count = sum(1 for user in users if user[2] == 'editor')
+            visualizador_count = sum(1 for user in users if user[2] == 'visualizador')
+
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total de Usuários", total_usuarios)
+            with col2:
+                st.metric("Administradores", admin_count)
+            with col3:
+                st.metric("Editores", editor_count)
+            with col4:
+                st.metric("Visualizadores", visualizador_count)
+
+    with tab4:
         st.subheader("🗑️ Excluir Usuários")
         
         # Buscar usuários
@@ -1054,29 +1395,6 @@ elif pagina == "👥 Gerenciar Usuários":
                         with col3:
                             st.write("🔒 Não pode excluir")
                         st.markdown("---")
-
-    # Estatísticas de usuários
-    st.markdown("---")
-    st.subheader("📊 Estatísticas de Usuários")
-    
-    users = get_all_users()
-    if users:
-        total_usuarios = len(users)
-        admin_count = sum(1 for user in users if user[2] == 'admin')
-        editor_count = sum(1 for user in users if user[2] == 'editor')
-        visualizador_count = sum(1 for user in users if user[2] == 'visualizador')
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total de Usuários", total_usuarios)
-        with col2:
-            st.metric("Administradores", admin_count)
-        with col3:
-            st.metric("Editores", editor_count)
-        with col4:
-            st.metric("Visualizadores", visualizador_count)
-    else:
-        st.info("Nenhum usuário cadastrado.")
 
 # ----------------------------
 # PÁGINA: CONTAS
@@ -1548,16 +1866,19 @@ elif pagina == "💾 Exportar Dados":
                 total_contas = pd.read_sql("SELECT COUNT(*) as total FROM contas", conn).iloc[0]['total']
                 meses_com_dados = pd.read_sql("SELECT COUNT(DISTINCT mes) as total FROM lancamentos", conn).iloc[0]['total']
                 total_eventos = pd.read_sql("SELECT COUNT(*) as total FROM eventos_calendario", conn).iloc[0]['total']
+                total_usuarios = pd.read_sql("SELECT COUNT(*) as total FROM usuarios", conn).iloc[0]['total']
             else:
                 total_lancamentos = 0
                 total_contas = 0
                 meses_com_dados = 0
                 total_eventos = 0
+                total_usuarios = 0
         except:
             total_lancamentos = 0
             total_contas = 0
             meses_com_dados = 0
             total_eventos = 0
+            total_usuarios = 0
         finally:
             if conn:
                 conn.close()
@@ -1565,6 +1886,7 @@ elif pagina == "💾 Exportar Dados":
         st.metric("Total de Contas", total_contas)
         st.metric("Meses com Dados", meses_com_dados)
         st.metric("Total de Eventos", total_eventos)
+        st.metric("Total de Usuários", total_usuarios)
         st.info("""
         Informações:
         - Banco de Dados: PlanetScale (MySQL)
@@ -1572,6 +1894,92 @@ elif pagina == "💾 Exportar Dados":
         - Exportação: CSV compatível com Excel
         - Segurança: Acesso por login
         """)
+
+# ----------------------------
+# PÁGINA: CRIAR BACKUP
+# ----------------------------
+elif pagina == "💽 Criar Backup":
+    st.title("💽 Criar Backup do Sistema")
+    
+    st.info("""
+    **📦 Sistema de Backup Completo**
+    
+    Esta funcionalidade permite criar backups completos de todos os dados do sistema,
+    incluindo lançamentos, contas, eventos e informações de usuários (sem senhas).
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🔒 Backup Completo")
+        st.write("Cria um backup completo de todos os dados do sistema.")
+        
+        if st.button("📦 Criar Backup Completo", use_container_width=True):
+            with st.spinner("Criando backup completo..."):
+                backup_data = criar_backup_completo()
+                if backup_data is not None:
+                    st.download_button(
+                        label="💾 Download Backup Completo",
+                        data=backup_data,
+                        file_name=f"backup_completo_livro_caixa_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                    st.success("✅ Backup completo criado com sucesso!")
+                else:
+                    st.error("❌ Erro ao criar backup completo")
+    
+    with col2:
+        st.subheader("🔄 Backup Incremental")
+        st.write("Cria backup apenas dos dados dos últimos 30 dias.")
+        
+        if st.button("🔄 Criar Backup Incremental", use_container_width=True):
+            with st.spinner("Criando backup incremental..."):
+                backup_data = criar_backup_incremental()
+                if backup_data is not None:
+                    st.download_button(
+                        label="💾 Download Backup Incremental",
+                        data=backup_data,
+                        file_name=f"backup_incremental_livro_caixa_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                    st.success("✅ Backup incremental criado com sucesso!")
+                else:
+                    st.error("❌ Erro ao criar backup incremental")
+    
+    st.markdown("---")
+    st.subheader("📋 Conteúdo dos Backups")
+    
+    col_info1, col_info2 = st.columns(2)
+    
+    with col_info1:
+        st.write("**Backup Completo inclui:**")
+        st.markdown("""
+        - ✅ Todos os lançamentos (organizados por mês)
+        - ✅ Contas cadastradas
+        - ✅ Eventos do calendário
+        - ✅ Usuários (sem informações de senha)
+        - ✅ Estrutura das tabelas (SQL)
+        - ✅ Informações do sistema
+        """)
+    
+    with col_info2:
+        st.write("**Backup Incremental inclui:**")
+        st.markdown("""
+        - ✅ Lançamentos dos últimos 30 dias
+        - ✅ Eventos dos últimos 30 dias
+        - ✅ Informações do backup
+        """)
+    
+    st.markdown("---")
+    st.subheader("⚠️ Recomendações")
+    st.warning("""
+    - **Frequência:** Recomenda-se criar backups completos mensalmente
+    - **Armazenamento:** Mantenha os backups em local seguro
+    - **Teste:** Periodicamente, verifique se os backups estão íntegros
+    - **Segurança:** Os backups não incluem senhas por motivos de segurança
+    """)
 
 # RODAPÉ
 st.markdown("---")
