@@ -1260,7 +1260,7 @@ elif pagina == "📅 Calendário":
                     st.markdown(
                         f'<div style="{estilo_dia} padding: 10px; margin: 2px; border-radius: 5px; text-align: center; min-height: 80px;">'
                         f'<strong>{dia.day}</strong>'
-                        f'{"<br><span style=\\"color: red; font-size: 12px;\\">●</span>" if tem_eventos else ""}'
+                        f"{'<br><span style=\"color: red; font-size: 12px;\">●</span>' if tem_eventos else ''}"
                         f'</div>',
                         unsafe_allow_html=True
                     )
