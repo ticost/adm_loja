@@ -125,7 +125,6 @@ def init_auth_db():
 
         # ADICIONAR CAMPOS OPCIONAIS - cada coluna é opcional (NULL)
         # Usa ADD COLUMN IF NOT EXISTS para evitar erros se já existir.
-        # Nota: PlanetScale/MySQL 8+ aceita "ADD COLUMN IF NOT EXISTS"
         alter_statements = [
             "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nome_completo VARCHAR(200)",
             "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefone VARCHAR(50)",
@@ -144,8 +143,6 @@ def init_auth_db():
                 cursor.execute(stmt)
             except Exception:
                 # Em ambientes onde IF NOT EXISTS não é suportado, ignorar falhas
-                # (ou você pode descomentar para logar)
-                # st.warning(f"Atenção: não foi possível executar: {stmt}")
                 pass
 
         # Inserir usuários padrão se não existirem
@@ -165,7 +162,6 @@ def init_auth_db():
             )
 
         conn.commit()
-        st.success("✅ Tabela de usuários inicializada/atualizada com sucesso!")
     except Error as e:
         st.error(f"❌ Erro ao inicializar banco de autenticação: {e}")
     finally:
@@ -369,8 +365,7 @@ def change_password(username, new_password):
             conn.close()
 
 # =============================================================================
-# FUNÇÕES PRINCIPAIS (LANCAMENTOS, CONTAS, EVENTOS...) - mantidas
-# (aqui mantive suas funções originais escritas antes; você pode juntar com seu código anterior)
+# FUNÇÕES PRINCIPAIS (LANCAMENTOS, CONTAS, EVENTOS...)
 # =============================================================================
 
 def init_db():
@@ -422,7 +417,6 @@ def init_db():
         ''')
 
         conn.commit()
-        st.success("✅ Tabelas do sistema inicializadas com sucesso!")
     except Error as e:
         st.error(f"❌ Erro ao criar tabelas: {e}")
     finally:
@@ -791,43 +785,22 @@ with st.sidebar:
                     st.warning("⚠️ Preencha todos os campos!")
 
 # Menu principal
-menu_options = {
-    "📋 Ajuda": "ajuda",
-    "👥 Gerenciar Usuários": "usuarios",
-    "📝 Contas": "contas",
-    "📥 Lançamentos": "lancamentos",
-    "📅 Calendário": "calendario",
-    "📈 Balanço Financeiro": "balanco",
-    "💾 Exportar Dados": "exportar",
-    "💽 Criar Backup": "backup"
-}
+opcoes_menu = [
+    "📋 Ajuda", 
+    "👥 Gerenciar Usuários",
+    "📝 Contas", 
+    "📥 Lançamentos", 
+    "📅 Calendário", 
+    "📈 Balanço Financeiro", 
+    "💾 Exportar Dados"
+]
 
-# Seleção do menu
-menu_choice = st.sidebar.radio("Navegação", list(menu_options.keys()))
+pagina = st.sidebar.radio("**Navegação:**", opcoes_menu)
 
-# Aqui você pode usar o valor selecionado para mostrar o conteúdo correspondente
-if menu_choice == "📋 Ajuda":
-    st.write("Página de Ajuda")
-elif menu_choice == "👥 Gerenciar Usuários":
-    st.write("Página de Gerenciamento de Usuários")
-elif menu_choice == "📝 Contas":
-    st.write("Página de Contas")
-elif menu_choice == "📥 Lançamentos":
-    st.write("Página de Lançamentos")
-elif menu_choice == "📅 Calendário":
-    st.write("Página de Calendário")
-elif menu_choice == "📈 Balanço Financeiro":
-    st.write("Página de Balanço Financeiro")
-elif menu_choice == "💾 Exportar Dados":
-    st.write("Página de Exportação de Dados")
-elif menu_choice == "💽 Criar Backup":
-    st.write("Página de Backup")
 st.markdown("---")
 
-#pagina = st.radio("**Navegação:**", opcoes_menu, label_visibility="collapsed")
-
 # ----------------------------
-# PÁ3GINA: AJUDA (mantida)
+# PÁGINA: AJUDA
 # ----------------------------
 if pagina == "📋 Ajuda":
     st.title("📋 Ajuda - Livro Caixa")
@@ -898,8 +871,6 @@ elif pagina == "👥 Gerenciar Usuários":
                     st.error("❌ A senha deve ter pelo menos 4 caracteres!")
                 else:
                     # Converter datas vazias para None (MySQL aceita NULL)
-                    def norm_date(d):
-                        return d if isinstance(d, date) and d != date(1900,1,1) else None
                     da = data_aniversario if data_aniversario else None
                     di = data_iniciacao if data_iniciacao else None
                     de = data_elevacao if data_elevacao else None
@@ -1064,7 +1035,7 @@ elif pagina == "📝 Contas":
         st.info("👀 Modo de Visualização - Você pode apenas visualizar as contas existentes.")
 
 # ----------------------------
-# PÁGINA: LANÇAMENTOS (mantida)
+# PÁGINA: LANÇAMENTOS
 # ----------------------------
 elif pagina == "📥 Lançamentos":
     st.title("📥 Lançamentos do Caixa")
@@ -1230,7 +1201,7 @@ elif pagina == "📥 Lançamentos":
                 st.rerun()
 
 # ----------------------------
-# PÁGINA: CALENDÁRIO (mantida)
+# PÁGINA: CALENDÁRIO
 # ----------------------------
 elif pagina == "📅 Calendário":
     st.title("📅 Calendário Programável")
@@ -1392,7 +1363,7 @@ elif pagina == "📅 Calendário":
                 st.rerun()
 
 # ----------------------------
-# PÁGINA: BALANÇO FINANCEIRO (mantida)
+# PÁGINA: BALANÇO FINANCEIRO
 # ----------------------------
 elif pagina == "📈 Balanço Financeiro":
     st.title("📈 Balanço Financeiro")
@@ -1440,7 +1411,7 @@ elif pagina == "📈 Balanço Financeiro":
             st.bar_chart(df_grafico.set_index('Mês')[['Entradas', 'Saídas']], use_container_width=True)
 
 # ----------------------------
-# PÁGINA: EXPORTAR DADOS (mantida)
+# PÁGINA: EXPORTAR DADOS
 # ----------------------------
 elif pagina == "💾 Exportar Dados":
     st.title("💾 Exportar Dados")
