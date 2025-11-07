@@ -35,8 +35,10 @@ PERMISSOES = {
 # FUNÇÃO PARA CARREGAR IMAGEM DO LOGO
 # =============================================================================
 
-def carregar_imagem_logo(nome_arquivo):
-"""Carrega a imagem do logo com múltiplas tentativas de caminho"""
+def carregar_logo():
+    """Carrega a imagem do logo com múltiplas tentativas de caminho"""
+    pass
+
 try:
     # Tenta diferentes caminhos possíveis
     caminhos_tentativos = [
