@@ -423,8 +423,10 @@ finally:
     if conn:
         conn.close()
 
-def get_contas():
-"""Busca todas as contas"""
+def get_all_accounts():
+    """Busca todas as contas"""
+    pass
+
 conn = get_db_connection()
 if not conn:
     return []
