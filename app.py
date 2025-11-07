@@ -1456,8 +1456,8 @@ if user_can_edit():
 # PÁGINA: CALENDÁRIO
 # =============================================================================
 
-elif pagina == "📅 Calendário":
-st.title("📅 Calendário Programável")
+if pagina == "📅 Calendário":
+    st.title("📅 Calendário Programável")
 
 # Configurações iniciais
 hoje = date.today()
@@ -1687,8 +1687,8 @@ if 'editando_evento' in st.session_state:
 # PÁGINA: BALANÇO FINANCEIRO
 # =============================================================================
 
-elif pagina == "📈 Balanço Financeiro":
-st.title("📈 Balanço Financeiro")
+if pagina == "📈 Balanço Financeiro":
+    st.title("📈 Balanço Financeiro")
 
 # Calcular totais anuais
 total_entradas_anual = 0.0
@@ -1752,8 +1752,8 @@ with col2:
 # PÁGINA: EXPORTAR DADOS
 # =============================================================================
 
-elif pagina == "💾 Exportar Dados":
-st.title("💾 Exportar Dados")
+if pagina == "💾 Exportar Dados":
+    st.title("💾 Exportar Dados")
 
 col1, col2 = st.columns(2)
 
