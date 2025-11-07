@@ -856,8 +856,9 @@ if st.button("🔍 Verificar Secrets"):
 # =============================================================================
 
 # Verificar se os secrets estão configurados
-if "planetscale" not in st.secrets:
-pagina_configuracao()
+if pagina == "⚙️ Configuração":
+    pagina_configuracao()
+
 st.stop()
 
 # Se chegou aqui, os secrets existem - testar conexão
