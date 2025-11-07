@@ -73,7 +73,8 @@ except Exception as e:
 # =============================================================================
 
 def get_db_connection():
-"""Cria conexão com o PlanetScale usando PyMySQL"""
+    """Cria conexão com o PlanetScale usando PyMySQL"""
+    pass
 try:
     if "planetscale" not in st.secrets:
         st.error("❌ Secrets do PlanetScale não encontrados")
