@@ -1317,7 +1317,7 @@ def gerar_html_agenda_contatos(users):
     return html_content
 
 def visualizar_agenda_contatos():
-    """Interface para visualização da agenda de contatos"""
+    """Interface para visualização da agenda de contatos - Layout otimizado para mobile"""
     st.header("📒 Agenda de Contatos")
     
     # Buscar todos os usuários (todos os usuários podem acessar)
@@ -1329,26 +1329,27 @@ def visualizar_agenda_contatos():
     
     st.success(f"📊 Total de contatos encontrados: {len(users)}")
     
-    # Filtros e busca
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Filtros e busca - Layout mais compacto para mobile
+    col1, col2 = st.columns([2, 1])
     
     with col1:
-        busca = st.text_input("🔍 Buscar por nome, usuário ou e-mail:", placeholder="Digite para filtrar...")
+        busca = st.text_input("🔍 Buscar:", placeholder="Nome, usuário ou e-mail")
     
     with col2:
-        if user_is_admin():
-            filtro_permissao = st.selectbox(
-                "Filtrar por permissão:",
-                ["Todos"] + list(PERMISSOES.values())
-            )
-        else:
-            filtro_permissao = "Todos"
-    
-    with col3:
         ordenacao = st.selectbox(
-            "Ordenar por:",
-            ["Nome Completo", "Usuário", "Data de Cadastro"]
+            "Ordenar:",
+            ["Nome", "Usuário", "Data"]
         )
+    
+    # Filtro de permissão apenas para admin (em linha separada para mobile)
+    if user_is_admin():
+        filtro_permissao = st.selectbox(
+            "Filtrar permissão:",
+            ["Todos"] + list(PERMISSOES.values()),
+            key="filtro_permissao_mobile"
+        )
+    else:
+        filtro_permissao = "Todos"
     
     # Aplicar filtros
     users_filtrados = []
@@ -1359,12 +1360,11 @@ def visualizar_agenda_contatos():
         
         # Para usuários não-admin, ocultar informações sensíveis de outros usuários
         if not user_is_admin() and username != st.session_state.username:
-            # Manter apenas informações básicas para visualização
-            email = None  # Ocultar e-mail de outros usuários
-            telefone = None  # Ocultar telefone
-            endereco = None  # Ocultar endereço
-            observacoes = None  # Ocultar observações
-            redes_sociais = None  # Ocultar redes sociais
+            email = None
+            telefone = None
+            endereco = None
+            observacoes = None
+            redes_sociais = None
         
         # Aplicar filtro de busca
         if busca:
@@ -1390,36 +1390,36 @@ def visualizar_agenda_contatos():
         ))
     
     # Aplicar ordenação
-    if ordenacao == "Nome Completo":
-        users_filtrados.sort(key=lambda x: (x[4] or x[0]).lower())  # nome_completo ou username
+    if ordenacao == "Nome":
+        users_filtrados.sort(key=lambda x: (x[4] or x[0]).lower())
     elif ordenacao == "Usuário":
-        users_filtrados.sort(key=lambda x: x[0].lower())  # username
-    elif ordenacao == "Data de Cadastro":
-        users_filtrados.sort(key=lambda x: x[3], reverse=True)  # created_at
+        users_filtrados.sort(key=lambda x: x[0].lower())
+    elif ordenacao == "Data":
+        users_filtrados.sort(key=lambda x: x[3], reverse=True)
     
-    # Exibir estatísticas (apenas para admin)
+    # Exibir estatísticas (apenas para admin) - Layout mais compacto
     if user_is_admin():
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Total", len(users_filtrados))
         with col2:
             admins = len([u for u in users_filtrados if u[2] == 'admin'])
-            st.metric("Administradores", admins)
+            st.metric("Admins", admins)
         with col3:
             editores = len([u for u in users_filtrados if u[2] == 'editor'])
             st.metric("Editores", editores)
         with col4:
             visualizadores = len([u for u in users_filtrados if u[2] == 'visualizador'])
-            st.metric("Visualizadores", visualizadores)
+            st.metric("Visual.", visualizadores)
     else:
         st.info("👁️ Modo de visualização - Algumas informações podem estar ocultas")
     
-    # Opções de exportação (apenas para admin)
+    # Opções de exportação (apenas para admin) - Botões mais compactos
     if user_is_admin():
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🖨️ Gerar HTML para Impressão", use_container_width=True):
+            if st.button("🖨️ HTML", use_container_width=True, help="Gerar HTML para impressão"):
                 html_content = gerar_html_agenda_contatos(users_filtrados)
                 st.download_button(
                     label="📥 Download HTML",
@@ -1430,8 +1430,7 @@ def visualizar_agenda_contatos():
                 )
         
         with col2:
-            if st.button("📊 Exportar para CSV", use_container_width=True):
-                # Criar DataFrame para exportação
+            if st.button("📊 CSV", use_container_width=True, help="Exportar para CSV"):
                 dados_exportacao = []
                 for user in users_filtrados:
                     username, email, permissao, created_at, nome_completo, telefone, endereco, \
@@ -1465,87 +1464,79 @@ def visualizar_agenda_contatos():
                     mime="text/csv",
                     use_container_width=True
                 )
-        
-        with col3:
-            if st.button("🔄 Atualizar Visualização", use_container_width=True):
-                st.rerun()
-    else:
-        # Para usuários não-admin, botão simples de atualização
-        if st.button("🔄 Atualizar Visualização", use_container_width=True):
-            st.rerun()
+    
+    # Botão de atualização
+    if st.button("🔄 Atualizar Visualização", use_container_width=True):
+        st.rerun()
     
     st.markdown("---")
     
-    # Exibir contatos em formato de cards
+    # Exibir contatos em formato otimizado para mobile
     for i, user in enumerate(users_filtrados):
         username, email, permissao, created_at, nome_completo, telefone, endereco, \
         data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
         data_instalacao_posse, observacoes, redes_sociais = user
         
         with st.container():
-            col1, col2 = st.columns([3, 1])
+            # Header principal do card
+            nome_display = nome_completo or username
+            permissao_display = PERMISSOES.get(permissao, permissao)
             
-            with col1:
-                # Header do card
-                nome_display = nome_completo or username
-                st.subheader(f"👤 {nome_display}")
+            # Layout principal - uma coluna única para mobile
+            st.subheader(f"👤 {nome_display}")
+            st.caption(f"Usuário: {username} | {permissao_display}")
+            
+            # Informações principais em cards expansíveis
+            with st.expander("📋 Informações de Contato", expanded=False):
+                col1, col2 = st.columns(2)
                 
-                # Informações básicas
-                col_info1, col_info2, col_info3 = st.columns(3)
-                
-                with col_info1:
-                    st.write(f"**Usuário:** {username}")
-                    # Ocultar e-mail para outros usuários (não-admin)
+                with col1:
                     if user_is_admin() or username == st.session_state.username:
-                        st.write(f"**E-mail:** {email or 'Não informado'}")
-                    st.write(f"**Permissão:** {PERMISSOES.get(permissao, permissao)}")
+                        if email:
+                            st.write(f"**📧 E-mail:** {email}")
+                        if telefone:
+                            st.write(f"**📞 Telefone:** {telefone}")
                 
-                with col_info2:
-                    # Ocultar telefone para outros usuários (não-admin)
-                    if user_is_admin() or username == st.session_state.username:
-                        st.write(f"**Telefone:** {telefone or 'Não informado'}")
-                    st.write(f"**Cadastrado em:** {created_at.strftime('%d/%m/%Y')}")
-                    if data_aniversario:
-                        st.write(f"**Aniversário:** {data_aniversario.strftime('%d/%m')}")
-                
-                with col_info3:
-                    # Ocultar redes sociais e endereço para outros usuários (não-admin)
+                with col2:
                     if user_is_admin() or username == st.session_state.username:
                         if redes_sociais:
-                            st.write(f"**Redes Sociais:** {redes_sociais}")
+                            st.write(f"**🌐 Redes Sociais:** {redes_sociais}")
                         if endereco:
-                            st.write(f"**Endereço:** {endereco}")
-                
-                # Datas importantes (se houver) - sempre visíveis
-                datas_importantes = []
-                if data_iniciacao:
-                    datas_importantes.append(f"**Iniciação:** {data_iniciacao.strftime('%d/%m/%Y')}")
-                if data_elevacao:
-                    datas_importantes.append(f"**Elevação:** {data_elevacao.strftime('%d/%m/%Y')}")
-                if data_exaltacao:
-                    datas_importantes.append(f"**Exaltação:** {data_exaltacao.strftime('%d/%m/%Y')}")
-                if data_instalacao_posse:
-                    datas_importantes.append(f"**Posse:** {data_instalacao_posse.strftime('%d/%m/%Y')}")
-                
-                if datas_importantes:
-                    with st.expander("📅 Datas Importantes"):
-                        for data_info in datas_importantes:
-                            st.write(data_info)
-                
-                # Observações (apenas para admin ou próprio usuário)
-                if observacoes and (user_is_admin() or username == st.session_state.username):
-                    with st.expander("📝 Observações"):
-                        st.write(observacoes)
+                            st.write(f"**🏠 Endereço:** {endereco}")
             
-            with col2:
-                # Botões de ação (apenas para admin)
-                if user_is_admin():
-                    st.write("**Ações:**")
-                    if st.button("✏️ Editar", key=f"edit_{username}", use_container_width=True):
-                        st.session_state.editing_user = username
-                        st.rerun()
-                elif username == st.session_state.username:
-                    st.write("**Seu perfil**")
+            # Datas importantes
+            with st.expander("📅 Datas Importantes", expanded=False):
+                datas = []
+                if data_aniversario:
+                    datas.append(f"**🎂 Aniversário:** {data_aniversario.strftime('%d/%m/%Y')}")
+                if data_iniciacao:
+                    datas.append(f"**🕊️ Iniciação:** {data_iniciacao.strftime('%d/%m/%Y')}")
+                if data_elevacao:
+                    datas.append(f"**⬆️ Elevação:** {data_elevacao.strftime('%d/%m/%Y')}")
+                if data_exaltacao:
+                    datas.append(f"**⭐ Exaltação:** {data_exaltacao.strftime('%d/%m/%Y')}")
+                if data_instalacao_posse:
+                    datas.append(f"**👑 Posse:** {data_instalacao_posse.strftime('%d/%m/%Y')}")
+                
+                if datas:
+                    for data_info in datas:
+                        st.write(data_info)
+                else:
+                    st.write("Nenhuma data importante cadastrada")
+            
+            # Observações (apenas para admin ou próprio usuário)
+            if observacoes and (user_is_admin() or username == st.session_state.username):
+                with st.expander("📝 Observações", expanded=False):
+                    st.write(observacoes)
+            
+            # Informação de cadastro
+            st.caption(f"📅 Cadastrado em: {created_at.strftime('%d/%m/%Y')}")
+            
+            # Botão de ação (apenas para admin)
+            if user_is_admin():
+                if st.button("✏️ Editar Usuário", key=f"edit_{username}", use_container_width=True):
+                    st.session_state.editing_user = username
+                    st.rerun()
             
             st.markdown("---")
 
