@@ -82,7 +82,7 @@ def carregar_imagem_logo(nome_arquivo):
 # =============================================================================
 def exibir_logo():
     """Exibe o logo da loja no sidebar ou header"""
-    caminho_logo = carregar_imagem_logo("logo.png")  # Tenta carregar logo.png primeiro
+    caminho_logo = carregar_imagem_logo("Logo_Loja.png")  # Tenta carregar logo.png primeiro
     
     # Se não encontrar, tenta outros nomes comuns
     if not caminho_logo:
