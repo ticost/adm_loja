@@ -1581,7 +1581,7 @@ def main():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         # Tenta carregar e exibir um logo pequeno no header também
-        caminho_logo_header = carregar_imagem_logo("Logo_Loja.png")
+        caminho_logo_header = carregar_imagem_logo("logo.png")
         if caminho_logo_header:
             try:
                 image = Image.open(caminho_logo_header)
