@@ -1774,7 +1774,7 @@ def show_novo_evento():
         with col2:
             hora_evento = st.time_input("Hora do Evento:", value=time(19, 0))
             tipo_evento = st.selectbox("Tipo de Evento:", [
-                "", "Reunião", "Evento Social", "Trabalho", "Pessoal", "Outro"
+                "", "Iniciação", "Elevação", "Exaltação", "Sessão Economica", "Jantar Ritualistico", " etc"
             ])
             cor_evento = st.color_picker("Cor do Evento:", "#FF4B4B")
         
