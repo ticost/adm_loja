@@ -330,6 +330,29 @@ def get_all_users():
         if conn:
             conn.close()
 
+def get_all_users_for_agenda():
+    """Busca todos os usuários para a agenda de contatos (todos podem acessar)"""
+    conn = get_db_connection()
+    if not conn:
+        return []
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT username, email, permissao, created_at,
+                   nome_completo, telefone, endereco,
+                   data_aniversario, data_iniciacao, data_elevacao,
+                   data_exaltacao, data_instalacao_posse, observacoes, redes_sociais
+            FROM usuarios
+            ORDER BY nome_completo, username
+        ''')
+        return cursor.fetchall()
+    except Error:
+        return []
+    finally:
+        if conn:
+            conn.close()
+
 def get_user_by_username(username):
     """Busca um usuário específico pelo username"""
     conn = get_db_connection()
@@ -1297,12 +1320,8 @@ def visualizar_agenda_contatos():
     """Interface para visualização da agenda de contatos"""
     st.header("📒 Agenda de Contatos")
     
-    if not user_is_admin():
-        st.warning("⚠️ Apenas administradores podem acessar a agenda de contatos")
-        return
-    
-    # Buscar todos os usuários
-    users = get_all_users()
+    # Buscar todos os usuários (todos os usuários podem acessar)
+    users = get_all_users_for_agenda()
     
     if not users:
         st.info("📭 Nenhum usuário cadastrado no sistema")
@@ -1317,10 +1336,13 @@ def visualizar_agenda_contatos():
         busca = st.text_input("🔍 Buscar por nome, usuário ou e-mail:", placeholder="Digite para filtrar...")
     
     with col2:
-        filtro_permissao = st.selectbox(
-            "Filtrar por permissão:",
-            ["Todos"] + list(PERMISSOES.values())
-        )
+        if user_is_admin():
+            filtro_permissao = st.selectbox(
+                "Filtrar por permissão:",
+                ["Todos"] + list(PERMISSOES.values())
+            )
+        else:
+            filtro_permissao = "Todos"
     
     with col3:
         ordenacao = st.selectbox(
@@ -1335,6 +1357,15 @@ def visualizar_agenda_contatos():
         data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
         data_instalacao_posse, observacoes, redes_sociais = user
         
+        # Para usuários não-admin, ocultar informações sensíveis de outros usuários
+        if not user_is_admin() and username != st.session_state.username:
+            # Manter apenas informações básicas para visualização
+            email = None  # Ocultar e-mail de outros usuários
+            telefone = None  # Ocultar telefone
+            endereco = None  # Ocultar endereço
+            observacoes = None  # Ocultar observações
+            redes_sociais = None  # Ocultar redes sociais
+        
         # Aplicar filtro de busca
         if busca:
             busca_lower = busca.lower()
@@ -1347,12 +1378,16 @@ def visualizar_agenda_contatos():
             if not match_busca:
                 continue
         
-        # Aplicar filtro de permissão
-        if filtro_permissao != "Todos":
+        # Aplicar filtro de permissão (apenas para admin)
+        if user_is_admin() and filtro_permissao != "Todos":
             if PERMISSOES.get(permissao) != filtro_permissao:
                 continue
         
-        users_filtrados.append(user)
+        users_filtrados.append((
+            username, email, permissao, created_at, nome_completo, telefone, endereco,
+            data_aniversario, data_iniciacao, data_elevacao, data_exaltacao,
+            data_instalacao_posse, observacoes, redes_sociais
+        ))
     
     # Aplicar ordenação
     if ordenacao == "Nome Completo":
@@ -1362,72 +1397,80 @@ def visualizar_agenda_contatos():
     elif ordenacao == "Data de Cadastro":
         users_filtrados.sort(key=lambda x: x[3], reverse=True)  # created_at
     
-    # Exibir estatísticas
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total", len(users_filtrados))
-    with col2:
-        admins = len([u for u in users_filtrados if u[2] == 'admin'])
-        st.metric("Administradores", admins)
-    with col3:
-        editores = len([u for u in users_filtrados if u[2] == 'editor'])
-        st.metric("Editores", editores)
-    with col4:
-        visualizadores = len([u for u in users_filtrados if u[2] == 'visualizador'])
-        st.metric("Visualizadores", visualizadores)
+    # Exibir estatísticas (apenas para admin)
+    if user_is_admin():
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total", len(users_filtrados))
+        with col2:
+            admins = len([u for u in users_filtrados if u[2] == 'admin'])
+            st.metric("Administradores", admins)
+        with col3:
+            editores = len([u for u in users_filtrados if u[2] == 'editor'])
+            st.metric("Editores", editores)
+        with col4:
+            visualizadores = len([u for u in users_filtrados if u[2] == 'visualizador'])
+            st.metric("Visualizadores", visualizadores)
+    else:
+        st.info("👁️ Modo de visualização - Algumas informações podem estar ocultas")
     
-    # Opções de exportação
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("🖨️ Gerar HTML para Impressão", use_container_width=True):
-            html_content = gerar_html_agenda_contatos(users_filtrados)
-            st.download_button(
-                label="📥 Download HTML",
-                data=html_content,
-                file_name=f"agenda_contatos_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
-                mime="text/html",
-                use_container_width=True
-            )
-    
-    with col2:
-        if st.button("📊 Exportar para CSV", use_container_width=True):
-            # Criar DataFrame para exportação
-            dados_exportacao = []
-            for user in users_filtrados:
-                username, email, permissao, created_at, nome_completo, telefone, endereco, \
-                data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
-                data_instalacao_posse, observacoes, redes_sociais = user
+    # Opções de exportação (apenas para admin)
+    if user_is_admin():
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🖨️ Gerar HTML para Impressão", use_container_width=True):
+                html_content = gerar_html_agenda_contatos(users_filtrados)
+                st.download_button(
+                    label="📥 Download HTML",
+                    data=html_content,
+                    file_name=f"agenda_contatos_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                    mime="text/html",
+                    use_container_width=True
+                )
+        
+        with col2:
+            if st.button("📊 Exportar para CSV", use_container_width=True):
+                # Criar DataFrame para exportação
+                dados_exportacao = []
+                for user in users_filtrados:
+                    username, email, permissao, created_at, nome_completo, telefone, endereco, \
+                    data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
+                    data_instalacao_posse, observacoes, redes_sociais = user
+                    
+                    dados_exportacao.append({
+                        'Nome Completo': nome_completo or '',
+                        'Usuário': username,
+                        'E-mail': email or '',
+                        'Permissão': PERMISSOES.get(permissao, permissao),
+                        'Telefone': telefone or '',
+                        'Endereço': endereco or '',
+                        'Data Aniversário': data_aniversario.strftime('%d/%m/%Y') if data_aniversario else '',
+                        'Data Iniciação': data_iniciacao.strftime('%d/%m/%Y') if data_iniciacao else '',
+                        'Data Elevação': data_elevacao.strftime('%d/%m/%Y') if data_elevacao else '',
+                        'Data Exaltação': data_exaltacao.strftime('%d/%m/%Y') if data_exaltacao else '',
+                        'Data Posse': data_instalacao_posse.strftime('%d/%m/%Y') if data_instalacao_posse else '',
+                        'Redes Sociais': redes_sociais or '',
+                        'Observações': observacoes or '',
+                        'Data Cadastro': created_at.strftime('%d/%m/%Y')
+                    })
                 
-                dados_exportacao.append({
-                    'Nome Completo': nome_completo or '',
-                    'Usuário': username,
-                    'E-mail': email or '',
-                    'Permissão': PERMISSOES.get(permissao, permissao),
-                    'Telefone': telefone or '',
-                    'Endereço': endereco or '',
-                    'Data Aniversário': data_aniversario.strftime('%d/%m/%Y') if data_aniversario else '',
-                    'Data Iniciação': data_iniciacao.strftime('%d/%m/%Y') if data_iniciacao else '',
-                    'Data Elevação': data_elevacao.strftime('%d/%m/%Y') if data_elevacao else '',
-                    'Data Exaltação': data_exaltacao.strftime('%d/%m/%Y') if data_exaltacao else '',
-                    'Data Posse': data_instalacao_posse.strftime('%d/%m/%Y') if data_instalacao_posse else '',
-                    'Redes Sociais': redes_sociais or '',
-                    'Observações': observacoes or '',
-                    'Data Cadastro': created_at.strftime('%d/%m/%Y')
-                })
-            
-            df_export = pd.DataFrame(dados_exportacao)
-            csv_data = df_export.to_csv(index=False, encoding='utf-8-sig')
-            
-            st.download_button(
-                label="📥 Download CSV",
-                data=csv_data,
-                file_name=f"agenda_contatos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-    
-    with col3:
+                df_export = pd.DataFrame(dados_exportacao)
+                csv_data = df_export.to_csv(index=False, encoding='utf-8-sig')
+                
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv_data,
+                    file_name=f"agenda_contatos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        
+        with col3:
+            if st.button("🔄 Atualizar Visualização", use_container_width=True):
+                st.rerun()
+    else:
+        # Para usuários não-admin, botão simples de atualização
         if st.button("🔄 Atualizar Visualização", use_container_width=True):
             st.rerun()
     
@@ -1452,22 +1495,28 @@ def visualizar_agenda_contatos():
                 
                 with col_info1:
                     st.write(f"**Usuário:** {username}")
-                    st.write(f"**E-mail:** {email or 'Não informado'}")
+                    # Ocultar e-mail para outros usuários (não-admin)
+                    if user_is_admin() or username == st.session_state.username:
+                        st.write(f"**E-mail:** {email or 'Não informado'}")
                     st.write(f"**Permissão:** {PERMISSOES.get(permissao, permissao)}")
                 
                 with col_info2:
-                    st.write(f"**Telefone:** {telefone or 'Não informado'}")
+                    # Ocultar telefone para outros usuários (não-admin)
+                    if user_is_admin() or username == st.session_state.username:
+                        st.write(f"**Telefone:** {telefone or 'Não informado'}")
                     st.write(f"**Cadastrado em:** {created_at.strftime('%d/%m/%Y')}")
                     if data_aniversario:
                         st.write(f"**Aniversário:** {data_aniversario.strftime('%d/%m')}")
                 
                 with col_info3:
-                    if redes_sociais:
-                        st.write(f"**Redes Sociais:** {redes_sociais}")
-                    if endereco:
-                        st.write(f"**Endereço:** {endereco}")
+                    # Ocultar redes sociais e endereço para outros usuários (não-admin)
+                    if user_is_admin() or username == st.session_state.username:
+                        if redes_sociais:
+                            st.write(f"**Redes Sociais:** {redes_sociais}")
+                        if endereco:
+                            st.write(f"**Endereço:** {endereco}")
                 
-                # Datas importantes (se houver)
+                # Datas importantes (se houver) - sempre visíveis
                 datas_importantes = []
                 if data_iniciacao:
                     datas_importantes.append(f"**Iniciação:** {data_iniciacao.strftime('%d/%m/%Y')}")
@@ -1483,16 +1532,20 @@ def visualizar_agenda_contatos():
                         for data_info in datas_importantes:
                             st.write(data_info)
                 
-                # Observações
-                if observacoes:
+                # Observações (apenas para admin ou próprio usuário)
+                if observacoes and (user_is_admin() or username == st.session_state.username):
                     with st.expander("📝 Observações"):
                         st.write(observacoes)
             
             with col2:
-                st.write("**Ações:**")
-                if st.button("✏️ Editar", key=f"edit_{username}", use_container_width=True):
-                    st.session_state.editing_user = username
-                    st.rerun()
+                # Botões de ação (apenas para admin)
+                if user_is_admin():
+                    st.write("**Ações:**")
+                    if st.button("✏️ Editar", key=f"edit_{username}", use_container_width=True):
+                        st.session_state.editing_user = username
+                        st.rerun()
+                elif username == st.session_state.username:
+                    st.write("**Seu perfil**")
             
             st.markdown("---")
 
@@ -1557,9 +1610,12 @@ def show_main_application():
         # Menu de navegação
         menu_options = ["📊 Livro Caixa", "📅 Calendário", "⚙️ Configurações"]
         
+        # TODOS os usuários podem ver a agenda de contatos
+        menu_options.append("📒 Agenda de Contatos")
+        
+        # Apenas admins podem gerenciar usuários
         if user_is_admin():
             menu_options.append("👥 Gerenciar Usuários")
-            menu_options.append("📒 Agenda de Contatos")
         
         selected_menu = st.radio("Navegação", menu_options, key="nav_menu")
         
@@ -1569,6 +1625,7 @@ def show_main_application():
         st.write("**💡 Dicas:**")
         st.write("- Use o Livro Caixa para registrar entradas e saídas")
         st.write("- O calendário ajuda no planejamento de eventos")
+        st.write("- A agenda de contatos mostra informações dos membros")
         if user_is_admin():
             st.write("- Como admin, você pode gerenciar usuários")
         
@@ -1588,8 +1645,8 @@ def show_main_application():
         show_configuracoes()
     elif selected_menu == "👥 Gerenciar Usuários" and user_is_admin():
         show_gerenciar_usuarios()
-    elif selected_menu == "📒 Agenda de Contatos" and user_is_admin():
-        visualizar_agenda_contatos()
+    elif selected_menu == "📒 Agenda de Contatos":
+        visualizar_agenda_contatos()  # Agora todos os usuários podem acessar
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
