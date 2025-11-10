@@ -1112,7 +1112,7 @@ def show_editar_evento(evento_id):
                 st.rerun()
 
 # =============================================================================
-# FUNÇÕES PARA AGENDA DE CONTATOS - LAYOT OTIMIZADO PARA MOBILE
+# FUNÇÕES PARA AGENDA DE CONTATOS - LAYOUT MOBILE COM TODAS INFORMAÇÕES
 # =============================================================================
 
 def gerar_html_agenda_contatos(users):
@@ -1317,7 +1317,7 @@ def gerar_html_agenda_contatos(users):
     return html_content
 
 def visualizar_agenda_contatos():
-    """Interface para visualização da agenda de contatos - LAYOUT MOBILE FIRST"""
+    """Interface para visualização da agenda de contatos - TODOS veem TODAS as informações"""
     st.header("📒 Agenda de Contatos")
     
     users = get_all_users_for_agenda()
@@ -1329,7 +1329,7 @@ def visualizar_agenda_contatos():
     st.success(f"📊 Total de contatos: {len(users)}")
     
     # Filtros SIMPLES - uma linha para mobile
-    busca = st.text_input("🔍 Buscar:", placeholder="Digite nome ou usuário...")
+    busca = st.text_input("🔍 Buscar:", placeholder="Digite nome, usuário, e-mail...")
     
     # Aplicar filtro de busca
     users_filtrados = []
@@ -1338,19 +1338,12 @@ def visualizar_agenda_contatos():
         data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
         data_instalacao_posse, observacoes, redes_sociais = user
         
-        # Para usuários não-admin, ocultar informações sensíveis de outros usuários
-        if not user_is_admin() and username != st.session_state.username:
-            email = None
-            telefone = None
-            endereco = None
-            observacoes = None
-            redes_sociais = None
-        
         if busca:
             busca_lower = busca.lower()
             if not ((nome_completo and busca_lower in nome_completo.lower()) or
                    busca_lower in username.lower() or
-                   (email and busca_lower in email.lower())):
+                   (email and busca_lower in email.lower()) or
+                   (telefone and busca_lower in telefone)):
                 continue
         
         users_filtrados.append(user)
@@ -1362,9 +1355,60 @@ def visualizar_agenda_contatos():
     if st.button("🔄 Atualizar", use_container_width=True):
         st.rerun()
     
+    # Opções de exportação (apenas para admin)
+    if user_is_admin():
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🖨️ Gerar HTML", use_container_width=True):
+                html_content = gerar_html_agenda_contatos(users_filtrados)
+                st.download_button(
+                    label="📥 Download HTML",
+                    data=html_content,
+                    file_name=f"agenda_contatos_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                    mime="text/html",
+                    use_container_width=True
+                )
+        
+        with col2:
+            if st.button("📊 Exportar CSV", use_container_width=True):
+                dados_exportacao = []
+                for user in users_filtrados:
+                    username, email, permissao, created_at, nome_completo, telefone, endereco, \
+                    data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
+                    data_instalacao_posse, observacoes, redes_sociais = user
+                    
+                    dados_exportacao.append({
+                        'Nome Completo': nome_completo or '',
+                        'Usuário': username,
+                        'E-mail': email or '',
+                        'Permissão': PERMISSOES.get(permissao, permissao),
+                        'Telefone': telefone or '',
+                        'Endereço': endereco or '',
+                        'Data Aniversário': data_aniversario.strftime('%d/%m/%Y') if data_aniversario else '',
+                        'Data Iniciação': data_iniciacao.strftime('%d/%m/%Y') if data_iniciacao else '',
+                        'Data Elevação': data_elevacao.strftime('%d/%m/%Y') if data_elevacao else '',
+                        'Data Exaltação': data_exaltacao.strftime('%d/%m/%Y') if data_exaltacao else '',
+                        'Data Posse': data_instalacao_posse.strftime('%d/%m/%Y') if data_instalacao_posse else '',
+                        'Redes Sociais': redes_sociais or '',
+                        'Observações': observacoes or '',
+                        'Data Cadastro': created_at.strftime('%d/%m/%Y')
+                    })
+                
+                df_export = pd.DataFrame(dados_exportacao)
+                csv_data = df_export.to_csv(index=False, encoding='utf-8-sig')
+                
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv_data,
+                    file_name=f"agenda_contatos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+    
     st.markdown("---")
     
-    # EXIBIÇÃO MOBILE - Layout vertical único e simples
+    # EXIBIÇÃO MOBILE - Layout vertical com TODAS as informações visíveis
     for user in users_filtrados:
         username, email, permissao, created_at, nome_completo, telefone, endereco, \
         data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
@@ -1378,45 +1422,56 @@ def visualizar_agenda_contatos():
             st.write(f"### 👤 {nome_display}")
             st.write(f"**Usuário:** {username} | **Permissão:** {permissao_display}")
             
-            # INFORMAÇÕES DE CONTATO (se permitido)
-            if user_is_admin() or username == st.session_state.username:
-                if email or telefone or endereco or redes_sociais:
-                    with st.expander("📞 Contato", expanded=False):
-                        if email:
-                            st.write(f"**📧 E-mail:** {email}")
-                        if telefone:
-                            st.write(f"**📞 Telefone:** {telefone}")
-                        if endereco:
-                            st.write(f"**🏠 Endereço:** {endereco}")
-                        if redes_sociais:
-                            st.write(f"**🌐 Redes Sociais:** {redes_sociais}")
+            # INFORMAÇÕES DE CONTATO - SEMPRE VISÍVEIS
+            if email or telefone:
+                st.write("**📞 Contato:**")
+                if email:
+                    st.write(f"📧 **E-mail:** {email}")
+                if telefone:
+                    st.write(f"📱 **Telefone:** {telefone}")
+            
+            # ENDEREÇO E REDES SOCIAIS
+            if endereco or redes_sociais:
+                st.write("**📍 Informações Adicionais:**")
+                if endereco:
+                    st.write(f"🏠 **Endereço:** {endereco}")
+                if redes_sociais:
+                    st.write(f"🌐 **Redes Sociais:** {redes_sociais}")
             
             # DATAS IMPORTANTES
-            with st.expander("📅 Datas Importantes", expanded=False):
-                col1, col2 = st.columns(2)
-                with col1:
-                    if data_aniversario:
-                        st.write(f"• **Aniversário:** {data_aniversario.strftime('%d/%m/%Y')}")
-                    if data_iniciacao:
-                        st.write(f"• **Iniciação:** {data_iniciacao.strftime('%d/%m/%Y')}")
-                    if data_elevacao:
-                        st.write(f"• **Elevação:** {data_elevacao.strftime('%d/%m/%Y')}")
-                with col2:
-                    if data_exaltacao:
-                        st.write(f"• **Exaltação:** {data_exaltacao.strftime('%d/%m/%Y')}")
-                    if data_instalacao_posse:
-                        st.write(f"• **Posse:** {data_instalacao_posse.strftime('%d/%m/%Y')}")
-                
-                if not any([data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, data_instalacao_posse]):
-                    st.write("Nenhuma data importante cadastrada")
+            st.write("**📅 Datas Importantes:**")
+            col1, col2 = st.columns(2)
+            datas_existem = False
+            
+            with col1:
+                if data_aniversario:
+                    st.write(f"• 🎂 **Aniversário:** {data_aniversario.strftime('%d/%m/%Y')}")
+                    datas_existem = True
+                if data_iniciacao:
+                    st.write(f"• 🕊️ **Iniciação:** {data_iniciacao.strftime('%d/%m/%Y')}")
+                    datas_existem = True
+                if data_elevacao:
+                    st.write(f"• ⬆️ **Elevação:** {data_elevacao.strftime('%d/%m/%Y')}")
+                    datas_existem = True
+            
+            with col2:
+                if data_exaltacao:
+                    st.write(f"• ⭐ **Exaltação:** {data_exaltacao.strftime('%d/%m/%Y')}")
+                    datas_existem = True
+                if data_instalacao_posse:
+                    st.write(f"• 👑 **Posse:** {data_instalacao_posse.strftime('%d/%m/%Y')}")
+                    datas_existem = True
+            
+            if not datas_existem:
+                st.write("*Nenhuma data importante cadastrada*")
             
             # OBSERVAÇÕES
-            if observacoes and (user_is_admin() or username == st.session_state.username):
-                with st.expander("📝 Observações", expanded=False):
-                    st.write(observacoes)
+            if observacoes:
+                st.write("**📝 Observações:**")
+                st.write(observacoes)
             
             # INFORMAÇÃO DE CADASTRO
-            st.caption(f"📅 Cadastrado em: {created_at.strftime('%d/%m/%Y')}")
+            st.caption(f"📅 **Cadastrado em:** {created_at.strftime('%d/%m/%Y')}")
             
             # BOTÃO DE EDIÇÃO (apenas admin)
             if user_is_admin():
@@ -1484,8 +1539,12 @@ def show_main_application():
         st.write(f"**Permissão:** {PERMISSOES.get(st.session_state.permissao, st.session_state.permissao)}")
         st.markdown("---")
         
-        # Menu de navegação
-        menu_options = ["📊 Livro Caixa", "📅 Calendário", "⚙️ Configurações"]
+        # Menu de navegação - CONFIGURAÇÃO APENAS PARA ADMIN E EDITOR
+        menu_options = ["📊 Livro Caixa", "📅 Calendário"]
+        
+        # Configurações apenas para admin e editor
+        if user_can_edit():
+            menu_options.append("⚙️ Configurações")
         
         # TODOS os usuários podem ver a agenda de contatos
         menu_options.append("📒 Agenda de Contatos")
@@ -1518,12 +1577,12 @@ def show_main_application():
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
         show_calendario()
-    elif selected_menu == "⚙️ Configurações":
+    elif selected_menu == "⚙️ Configurações" and user_can_edit():
         show_configuracoes()
     elif selected_menu == "👥 Gerenciar Usuários" and user_is_admin():
         show_gerenciar_usuarios()
     elif selected_menu == "📒 Agenda de Contatos":
-        visualizar_agenda_contatos()  # Agora todos os usuários podem acessar
+        visualizar_agenda_contatos()
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
