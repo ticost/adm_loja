@@ -51,6 +51,10 @@ def init_session_state():
     if 'editing_event' not in st.session_state:
         st.session_state.editing_event = None
     
+    # Variáveis para gerenciamento de lançamentos
+    if 'editing_lancamento' not in st.session_state:
+        st.session_state.editing_lancamento = None
+    
     # Variáveis para navegação
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "📊 Livro Caixa"
@@ -230,6 +234,7 @@ def logout_user():
     st.session_state.editing_user = None
     st.session_state.viewing_user = None
     st.session_state.editing_event = None
+    st.session_state.editing_lancamento = None
     st.session_state.current_page = "📊 Livro Caixa"
 
 def user_is_admin():
@@ -507,7 +512,7 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS lancamentos (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                mes VARCHAR(20) NOT NULL,
+                mes VARCHAR(50) NOT NULL,
                 data DATE NOT NULL,
                 historico TEXT NOT NULL,
                 complemento TEXT,
@@ -537,7 +542,7 @@ def init_db():
                 hora_evento TIME,
                 tipo_evento VARCHAR(50),
                 cor_evento VARCHAR(20),
-                created_by VARCHAR(50),
+                created_by VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -595,6 +600,22 @@ def get_lancamentos_mes(mes):
         if conn:
             conn.close()
 
+def get_lancamento_by_id(lancamento_id):
+    """Busca um lançamento específico pelo ID"""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM lancamentos WHERE id = %s', (lancamento_id,))
+        result = cursor.fetchone()
+        return result
+    except Error:
+        return None
+    finally:
+        if conn:
+            conn.close()
+
 def salvar_lancamento(mes, data, historico, complemento, entrada, saida, saldo):
     conn = get_db_connection()
     if not conn:
@@ -640,6 +661,7 @@ def atualizar_lancamento(lancamento_id, mes, data, historico, complemento, entra
             saldo_atual += entrada_val - saida_val
             cursor.execute('UPDATE lancamentos SET saldo = %s WHERE id = %s', (saldo_atual, lanc[0]))
         conn.commit()
+        st.success("✅ Lançamento atualizado com sucesso!")
         return True
     except Error as e:
         st.error(f"❌ Erro ao atualizar lançamento: {e}")
@@ -664,6 +686,7 @@ def excluir_lancamento(lancamento_id, mes):
             saldo_atual += entrada_val - saida_val
             cursor.execute('UPDATE lancamentos SET saldo = %s WHERE id = %s', (saldo_atual, lanc[0]))
         conn.commit()
+        st.success("✅ Lançamento excluído com sucesso!")
         return True
     except Error as e:
         st.error(f"❌ Erro ao excluir: {e}")
@@ -709,6 +732,22 @@ def get_eventos_mes(ano, mes):
     except Exception as e:
         st.error(f"Erro ao buscar eventos: {e}")
         return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
+
+def get_evento_by_id(evento_id):
+    """Busca um evento específico pelo ID"""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM eventos_calendario WHERE id = %s', (evento_id,))
+        result = cursor.fetchone()
+        return result
+    except Error:
+        return None
     finally:
         if conn:
             conn.close()
@@ -953,6 +992,101 @@ def criar_backup_incremental():
     except Exception as e:
         st.error(f"❌ Erro ao criar backup incremental: {e}")
         return None
+
+# =============================================================================
+# FUNÇÕES PARA EDIÇÃO DE LANÇAMENTOS E EVENTOS
+# =============================================================================
+
+def show_editar_lancamento(lancamento_id, mes):
+    """Interface para editar um lançamento existente"""
+    lancamento = get_lancamento_by_id(lancamento_id)
+    
+    if not lancamento:
+        st.error("❌ Lançamento não encontrado")
+        return
+    
+    st.subheader(f"✏️ Editando Lançamento - {lancamento[3]}")  # historico
+    
+    with st.form("editar_lancamento"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            data = st.date_input("Data:", value=lancamento[2])  # data
+            historico = st.text_input("Histórico:*", value=lancamento[3], placeholder="Descrição do lançamento")  # historico
+            complemento = st.text_area("Complemento:", value=lancamento[4] or "", placeholder="Informações adicionais")  # complemento
+        
+        with col2:
+            entrada = st.number_input("Valor de Entrada (R$):", min_value=0.0, value=float(lancamento[5]), step=0.01)  # entrada
+            saida = st.number_input("Valor de Saída (R$):", min_value=0.0, value=float(lancamento[6]), step=0.01)  # saida
+        
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            submitted = st.form_submit_button("💾 Salvar Alterações")
+        
+        with col_btn2:
+            if st.form_submit_button("❌ Cancelar"):
+                st.session_state.editing_lancamento = None
+                st.rerun()
+        
+        if submitted:
+            if not historico:
+                st.error("❌ O campo Histórico é obrigatório")
+                return
+            
+            if entrada == 0 and saida == 0:
+                st.error("❌ Pelo menos um valor (entrada ou saída) deve ser diferente de zero")
+                return
+            
+            if atualizar_lancamento(lancamento_id, mes, data, historico, complemento, entrada, saida):
+                st.session_state.editing_lancamento = None
+                st.rerun()
+
+def show_editar_evento(evento_id):
+    """Interface para editar um evento existente"""
+    evento = get_evento_by_id(evento_id)
+    
+    if not evento:
+        st.error("❌ Evento não encontrado")
+        st.session_state.editing_event = None
+        return
+    
+    st.subheader(f"✏️ Editando Evento: {evento[1]}")  # titulo
+    
+    with st.form("editar_evento"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            titulo = st.text_input("Título do Evento:*", value=evento[1], placeholder="Nome do evento")  # titulo
+            descricao = st.text_area("Descrição:", value=evento[2] or "", placeholder="Detalhes do evento")  # descricao
+            data_evento = st.date_input("Data do Evento:*", value=evento[3])  # data_evento
+        
+        with col2:
+            hora_evento = st.time_input("Hora do Evento:", value=evento[4] if evento[4] else time(19, 0))  # hora_evento
+            tipo_evento = st.selectbox("Tipo de Evento:", [
+                "", "Iniciação", "Elevação", "Exaltação", "Sessão Economica", 
+                "Jantar Ritualistico", "Reunião", "Feriado", "Entrega", "Compromisso"
+            ], index=1 if evento[5] else 0)  # tipo_evento
+            cor_evento = st.color_picker("Cor do Evento:", value=evento[6] or "#FF4B4B")  # cor_evento
+        
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            submitted = st.form_submit_button("💾 Salvar Alterações")
+        
+        with col_btn2:
+            if st.form_submit_button("❌ Cancelar"):
+                st.session_state.editing_event = None
+                st.rerun()
+        
+        if submitted:
+            if not titulo:
+                st.error("❌ O campo Título é obrigatório")
+                return
+            
+            if atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
+                st.session_state.editing_event = None
+                st.rerun()
 
 # =============================================================================
 # FUNÇÕES PARA AGENDA DE CONTATOS
@@ -1461,6 +1595,15 @@ def show_livro_caixa():
     """Interface do Livro Caixa"""
     st.header("📊 Livro Caixa")
     
+    # Verificar se está editando um lançamento
+    if hasattr(st.session_state, 'editing_lancamento') and st.session_state.editing_lancamento:
+        # Buscar o mês atual para passar como parâmetro
+        meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        mes_atual = meses[datetime.now().month-1]
+        show_editar_lancamento(st.session_state.editing_lancamento, mes_atual)
+        return
+    
     # Seleção do mês
     meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
@@ -1561,16 +1704,58 @@ def show_lancamentos_mes(mes, df_lancamentos):
         df_display['saida'] = df_display['saida'].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
         df_display['saldo'] = df_display['saldo'].apply(lambda x: f"R$ {x:,.2f}")
         
-        st.dataframe(
-            df_display[['data', 'historico', 'complemento', 'entrada', 'saida', 'saldo']],
-            use_container_width=True,
-            hide_index=True
-        )
+        # Exibir cabeçalhos da tabela
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 2, 2, 2, 1, 1])
+        with col1:
+            st.write("**Data**")
+        with col2:
+            st.write("**Histórico**")
+        with col3:
+            st.write("**Entrada**")
+        with col4:
+            st.write("**Saída**")
+        with col5:
+            st.write("**Saldo**")
+        with col6:
+            st.write("**Editar**")
+        with col7:
+            st.write("**Excluir**")
+        
+        st.markdown("---")
+        
+        # Exibir cada linha com ações
+        for _, row in df_display.iterrows():
+            col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 2, 2, 2, 1, 1])
+            
+            with col1:
+                st.write(row['data'])
+            with col2:
+                st.write(f"**{row['historico']}**")
+                if row['complemento']:
+                    st.write(f"_{row['complemento']}_")
+            with col3:
+                st.write(row['entrada'])
+            with col4:
+                st.write(row['saida'])
+            with col5:
+                st.write(row['saldo'])
+            with col6:
+                if user_can_edit():
+                    if st.button("✏️", key=f"edit_{row['id']}"):
+                        st.session_state.editing_lancamento = row['id']
+                        st.rerun()
+            with col7:
+                if user_can_edit():
+                    if st.button("🗑️", key=f"del_{row['id']}"):
+                        if excluir_lancamento(row['id'], mes):
+                            st.rerun()
+            
+            st.markdown("---")
     else:
         # Visualização em cards
         for _, lancamento in df_lancamentos.iterrows():
             with st.container():
-                col1, col2, col3 = st.columns([3, 1, 1])
+                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
                 
                 with col1:
                     st.write(f"**{lancamento['historico']}**")
@@ -1586,6 +1771,18 @@ def show_lancamentos_mes(mes, df_lancamentos):
                 
                 with col3:
                     st.info(f"💰 R$ {lancamento['saldo']:,.2f}")
+                
+                with col4:
+                    if user_can_edit():
+                        col_edit, col_del = st.columns(2)
+                        with col_edit:
+                            if st.button("✏️", key=f"edit_card_{lancamento['id']}"):
+                                st.session_state.editing_lancamento = lancamento['id']
+                                st.rerun()
+                        with col_del:
+                            if st.button("🗑️", key=f"del_card_{lancamento['id']}"):
+                                if excluir_lancamento(lancamento['id'], mes):
+                                    st.rerun()
                 
                 st.markdown("---")
 
@@ -1660,6 +1857,11 @@ def show_calendario():
     """Interface do Calendário"""
     st.header("📅 Calendário de Eventos")
     
+    # Verificar se está editando um evento
+    if hasattr(st.session_state, 'editing_event') and st.session_state.editing_event:
+        show_editar_evento(st.session_state.editing_event)
+        return
+    
     # Seleção de mês/ano
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
@@ -1733,7 +1935,7 @@ def show_lista_eventos(df_eventos):
     
     for _, evento in df_eventos.iterrows():
         with st.container():
-            col1, col2, col3 = st.columns([3, 1, 1])
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
             
             with col1:
                 st.write(f"**{evento['titulo']}**")
@@ -1749,15 +1951,15 @@ def show_lista_eventos(df_eventos):
             
             with col3:
                 if user_can_edit():
-                    col_edit, col_del = st.columns(2)
-                    with col_edit:
-                        if st.button("✏️", key=f"edit_{evento['id']}"):
-                            st.session_state.editing_event = evento['id']
+                    if st.button("✏️ Editar", key=f"edit_{evento['id']}"):
+                        st.session_state.editing_event = evento['id']
+                        st.rerun()
+            
+            with col4:
+                if user_can_edit():
+                    if st.button("🗑️ Excluir", key=f"del_{evento['id']}"):
+                        if excluir_evento(evento['id']):
                             st.rerun()
-                    with col_del:
-                        if st.button("🗑️", key=f"del_{evento['id']}"):
-                            if excluir_evento(evento['id']):
-                                st.rerun()
             
             st.markdown("---")
 
