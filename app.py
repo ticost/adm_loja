@@ -15,7 +15,6 @@ from pymysql import Error
 from PIL import Image
 import requests
 from io import BytesIO
-import base64
 from PIL import Image
 
 # Configuração da página
