@@ -18,7 +18,7 @@ from io import BytesIO
 
 # Configuração da página
 st.set_page_config(
-    page_title="Livro Caixa",
+    page_title="Administração de Loja",
     page_icon="📒",
     layout="wide",
     initial_sidebar_state="expanded"
