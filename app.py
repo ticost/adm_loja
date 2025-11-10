@@ -15,7 +15,6 @@ from pymysql import Error
 from PIL import Image
 import requests
 from io import BytesIO
-from PIL import Image
 
 # Configuração da página
 st.set_page_config(
@@ -77,6 +76,88 @@ def carregar_imagem_logo(nome_arquivo):
             return caminho
 
     return None
+
+# =============================================================================
+# FUNÇÃO PARA CARREGAR E EXIBIR LOGO
+# =============================================================================
+def exibir_logo():
+    """Exibe o logo da loja no sidebar ou header"""
+    caminho_logo = carregar_imagem_logo("logo.png")  # Tenta carregar logo.png primeiro
+    
+    # Se não encontrar, tenta outros nomes comuns
+    if not caminho_logo:
+        caminho_logo = carregar_imagem_logo("logo.jpg")
+    if not caminho_logo:
+        caminho_logo = carregar_imagem_logo("logo.jpeg")
+    if not caminho_logo:
+        caminho_logo = carregar_imagem_logo("logo.webp")
+    
+    if caminho_logo:
+        try:
+            # Carregar e exibir a imagem
+            image = Image.open(caminho_logo)
+            
+            # Redimensionar se for muito grande (max 300px de largura)
+            largura, altura = image.size
+            if largura > 300:
+                nova_largura = 300
+                nova_altura = int((nova_largura / largura) * altura)
+                image = image.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+            
+            # Exibir no sidebar
+            st.sidebar.image(image, use_column_width=True)
+            
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Erro ao carregar logo: {e}")
+    else:
+        # Exibir placeholder se logo não for encontrado
+        st.sidebar.markdown("""
+        <div style='text-align: center; padding: 10px; border: 2px dashed #ccc; border-radius: 10px;'>
+            <h3>🏪 Minha Loja</h3>
+            <p>Logo não configurado</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+# =============================================================================
+# FUNÇÃO PARA FAZER UPLOAD DO LOGO (APENAS ADMIN)
+# =============================================================================
+def gerenciar_logo():
+    """Permite ao admin fazer upload de um novo logo"""
+    if not user_is_admin():
+        return
+    
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🖼️ Configurar Logo"):
+        st.write("**Upload do Logo da Loja**")
+        
+        uploaded_file = st.file_uploader(
+            "Escolha uma imagem para o logo:",
+            type=['png', 'jpg', 'jpeg', 'webp'],
+            key="logo_upload"
+        )
+        
+        if uploaded_file is not None:
+            try:
+                # Verificar o tamanho do arquivo (max 5MB)
+                if uploaded_file.size > 5 * 1024 * 1024:
+                    st.error("❌ Arquivo muito grande. Tamanho máximo: 5MB")
+                    return
+                
+                # Carregar e validar a imagem
+                image = Image.open(uploaded_file)
+                
+                # Mostrar preview
+                st.image(image, caption="Preview do Logo", width=200)
+                
+                # Salvar a imagem
+                caminho_logo = "logo.png"
+                image.save(caminho_logo, "PNG")
+                
+                st.success("✅ Logo salvo com sucesso!")
+                st.info("🔄 Recarregue a página para ver as alterações")
+                
+            except Exception as e:
+                st.error(f"❌ Erro ao processar imagem: {e}")
 
 # =============================================================================
 # CONEXÃO COM PLANETSCALE
@@ -1496,10 +1577,28 @@ def main():
     init_auth_db()
     init_db()
     
-    # Logo e cabeçalho
+    # Logo e cabeçalho - LAYOUT MELHORADO
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title("📒 Administração de Loja")
+        # Tenta carregar e exibir um logo pequeno no header também
+        caminho_logo_header = carregar_imagem_logo("Logo_Loja.png")
+        if caminho_logo_header:
+            try:
+                image = Image.open(caminho_logo_header)
+                # Redimensionar para header (max 100px)
+                largura, altura = image.size
+                if largura > 100:
+                    nova_largura = 100
+                    nova_altura = int((nova_largura / largura) * altura)
+                    image = image.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
+                
+                st.image(image, use_column_width=False)
+            except:
+                # Se der erro, mostra apenas o título
+                st.title("📒 Administração de Loja")
+        else:
+            st.title("📒 Administração de Loja")
+        
         st.markdown("---")
     
     # Sistema de autenticação
@@ -1531,100 +1630,6 @@ def show_login_section():
             else:
                 st.warning("⚠️ Preencha todos os campos")
 
-def show_main_application():
-    """Exibe a aplicação principal após login"""
-    
-    # Sidebar com navegação
-    with st.sidebar:
-        # Adicione estas importações no início do arquivo, se ainda não existirem
-import base64
-from PIL import Image
-
-# =============================================================================
-# FUNÇÃO PARA CARREGAR E EXIBIR LOGO
-# =============================================================================
-def exibir_logo():
-    """Exibe o logo da loja no sidebar ou header"""
-    caminho_logo = carregar_imagem_logo("Logo_Loja.png")  # Tenta carregar logo.png primeiro
-    
-    # Se não encontrar, tenta outros nomes comuns
-    if not caminho_logo:
-        caminho_logo = carregar_imagem_logo("logo.jpg")
-    if not caminho_logo:
-        caminho_logo = carregar_imagem_logo("logo.jpeg")
-    if not caminho_logo:
-        caminho_logo = carregar_imagem_logo("logo.webp")
-    
-    if caminho_logo:
-        try:
-            # Carregar e exibir a imagem
-            image = Image.open(caminho_logo)
-            
-            # Redimensionar se for muito grande (max 300px de largura)
-            largura, altura = image.size
-            if largura > 300:
-                nova_largura = 300
-                nova_altura = int((nova_largura / largura) * altura)
-                image = image.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-            
-            # Exibir no sidebar
-            st.sidebar.image(image, use_column_width=True)
-            
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Erro ao carregar logo: {e}")
-    else:
-        # Exibir placeholder se logo não for encontrado
-        st.sidebar.markdown("""
-        <div style='text-align: center; padding: 10px; border: 2px dashed #ccc; border-radius: 10px;'>
-            <h3>🏪 Minha Loja</h3>
-            <p>Logo não configurado</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-# =============================================================================
-# FUNÇÃO PARA FAZER UPLOAD DO LOGO (APENAS ADMIN)
-# =============================================================================
-def gerenciar_logo():
-    """Permite ao admin fazer upload de um novo logo"""
-    if not user_is_admin():
-        return
-    
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("🖼️ Configurar Logo"):
-        st.write("**Upload do Logo da Loja**")
-        
-        uploaded_file = st.file_uploader(
-            "Escolha uma imagem para o logo:",
-            type=['png', 'jpg', 'jpeg', 'webp'],
-            key="logo_upload"
-        )
-        
-        if uploaded_file is not None:
-            try:
-                # Verificar o tamanho do arquivo (max 5MB)
-                if uploaded_file.size > 5 * 1024 * 1024:
-                    st.error("❌ Arquivo muito grande. Tamanho máximo: 5MB")
-                    return
-                
-                # Carregar e validar a imagem
-                image = Image.open(uploaded_file)
-                
-                # Mostrar preview
-                st.image(image, caption="Preview do Logo", width=200)
-                
-                # Salvar a imagem
-                caminho_logo = "logo.png"
-                image.save(caminho_logo, "PNG")
-                
-                st.success("✅ Logo salvo com sucesso!")
-                st.info("🔄 Recarregue a página para ver as alterações")
-                
-            except Exception as e:
-                st.error(f"❌ Erro ao processar imagem: {e}")
-
-# =============================================================================
-# MODIFICAÇÃO NA FUNÇÃO show_main_application()
-# =============================================================================
 def show_main_application():
     """Exibe a aplicação principal após login"""
     
@@ -1673,97 +1678,6 @@ def show_main_application():
             st.rerun()
     
     # Resto da função mantido igual...
-    if selected_menu == "📊 Livro Caixa":
-        show_livro_caixa()
-    elif selected_menu == "📅 Calendário":
-        show_calendario()
-    elif selected_menu == "⚙️ Configurações" and user_can_edit():
-        show_configuracoes()
-    elif selected_menu == "👥 Gerenciar Usuários" and user_is_admin():
-        show_gerenciar_usuarios()
-    elif selected_menu == "📒 Agenda de Contatos":
-        visualizar_agenda_contatos()
-
-# =============================================================================
-# MODIFICAÇÃO NO CABEÇALHO PRINCIPAL
-# =============================================================================
-def main():
-    """Função principal da aplicação"""
-    
-    # Inicializar session state
-    init_session_state()
-    
-    # Inicializar banco de dados
-    init_auth_db()
-    init_db()
-    
-    # Logo e cabeçalho - LAYOUT MELHORADO
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        # Tenta carregar e exibir um logo pequeno no header também
-        caminho_logo_header = carregar_imagem_logo("Logo_Loja.png")
-        if caminho_logo_header:
-            try:
-                image = Image.open(caminho_logo_header)
-                # Redimensionar para header (max 100px)
-                largura, altura = image.size
-                if largura > 100:
-                    nova_largura = 100
-                    nova_altura = int((nova_largura / largura) * altura)
-                    image = image.resize((nova_largura, nova_altura), Image.Resampling.LANCZOS)
-                
-                st.image(image, use_column_width=False)
-            except:
-                # Se der erro, mostra apenas o título
-                st.title("📒 Administração de Loja")
-        else:
-            st.title("📒 Administração de Loja")
-        
-        st.markdown("---")
-    
-    # Resto da função mantido igual...
-    if not st.session_state.logged_in:
-        show_login_section()
-    else:
-        show_main_application()
-        st.header(f"👋 Olá, {st.session_state.username}!")
-        st.write(f"**Permissão:** {PERMISSOES.get(st.session_state.permissao, st.session_state.permissao)}")
-        st.markdown("---")
-        
-        # Menu de navegação - CONFIGURAÇÃO APENAS PARA ADMIN E EDITOR
-        menu_options = ["📊 Livro Caixa", "📅 Calendário"]
-        
-        # Configurações apenas para admin e editor
-        if user_can_edit():
-            menu_options.append("⚙️ Configurações")
-        
-        # TODOS os usuários podem ver a agenda de contatos
-        menu_options.append("📒 Agenda de Contatos")
-        
-        # Apenas admins podem gerenciar usuários
-        if user_is_admin():
-            menu_options.append("👥 Gerenciar Usuários")
-        
-        selected_menu = st.radio("Navegação", menu_options, key="nav_menu")
-        
-        st.markdown("---")
-        
-        # Informações do sistema
-        st.write("**💡 Dicas:**")
-        st.write("- Use o Livro Caixa para registrar entradas e saídas")
-        st.write("- O calendário ajuda no planejamento de eventos")
-        st.write("- A agenda de contatos mostra informações dos membros")
-        if user_is_admin():
-            st.write("- Como admin, você pode gerenciar usuários")
-        
-        st.markdown("---")
-        
-        # Logout
-        if st.button("🚪 Sair", use_container_width=True):
-            logout_user()
-            st.rerun()
-    
-    # Conteúdo principal baseado na seleção do menu
     if selected_menu == "📊 Livro Caixa":
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
