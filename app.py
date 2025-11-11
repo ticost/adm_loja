@@ -1156,57 +1156,63 @@ def show_editar_evento(evento_id):
         st.session_state.editing_event = None
         return
     
-    st.subheader(f"✏️ Editando Evento: {evento[1]}")  # titulo
+    st.subheader(f"✏️ Editando Evento: {evento[1]}")
     
-    with st.form("editar_evento"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            titulo = st.text_input("Título do Evento:*", value=evento[1], placeholder="Nome do evento")  # titulo
-            descricao = st.text_area("Descrição:", value=evento[2] or "", placeholder="Detalhes do evento")  # descricao
-            data_evento = st.date_input("Data do Evento:*", value=evento[3])  # data_evento
-        
-        with col2:
-            # CORREÇÃO: Tratamento seguro para hora_evento
-            hora_default = time(19, 0)
-            if evento[4]:  # hora_evento
+    # CORREÇÃO: Não usar st.form() - usar inputs diretamente
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        titulo = st.text_input("Título do Evento:*", value=evento[1], placeholder="Nome do evento", key="edit_titulo")
+        descricao = st.text_area("Descrição:", value=evento[2] or "", placeholder="Detalhes do evento", key="edit_descricao")
+        data_evento = st.date_input("Data do Evento:*", value=evento[3], key="edit_data")
+    
+    with col2:
+        # CORREÇÃO: Tratamento seguro para hora_evento
+        hora_default = time(19, 0)
+        if evento[4]:  # hora_evento
+            try:
                 if isinstance(evento[4], str):
-                    try:
-                        hora_default = datetime.strptime(evento[4], '%H:%M:%S').time()
-                    except ValueError:
-                        try:
-                            hora_default = datetime.strptime(evento[4], '%H:%M').time()
-                        except ValueError:
-                            hora_default = time(19, 0)
-                else:
+                    # Converter string para time
+                    if ':' in evento[4]:
+                        time_str = evento[4].split('.')[0]  # Remove microsegundos se existirem
+                        time_parts = time_str.split(':')
+                        if len(time_parts) >= 2:
+                            hora_default = time(int(time_parts[0]), int(time_parts[1]))
+                elif isinstance(evento[4], time):
                     hora_default = evento[4]
-            
-            hora_evento = st.time_input("Hora do Evento:", value=hora_default)
-            tipo_evento = st.selectbox("Tipo de Evento:", [
-                "", "Iniciação", "Elevação", "Exaltação", "Sessão Economica", 
-                "Jantar Ritualistico", "Reunião", "Feriado", "Entrega", "Compromisso"
-            ], index=1 if evento[5] else 0)  # tipo_evento
-            cor_evento = st.color_picker("Cor do Evento:", value=evento[6] or "#FF4B4B")  # cor_evento
+            except (ValueError, IndexError, TypeError) as e:
+                st.warning(f"⚠️ Hora padrão usada devido a erro: {e}")
+                hora_default = time(19, 0)
         
-        # CORREÇÃO: Botão de submit obrigatório para forms
-        col_btn1, col_btn2 = st.columns(2)
-        
-        with col_btn1:
-            submitted = st.form_submit_button("💾 Salvar Alterações")
-        
-        with col_btn2:
-            if st.form_submit_button("❌ Cancelar"):
-                st.session_state.editing_event = None
-                st.rerun()
-        
-        if submitted:
+        hora_evento = st.time_input("Hora do Evento:", value=hora_default, key="edit_hora")
+        tipo_evento = st.selectbox("Tipo de Evento:", [
+            "", "Iniciação", "Elevação", "Exaltação", "Sessão Economica", 
+            "Jantar Ritualistico", "Reunião", "Feriado", "Entrega", "Compromisso"
+        ], index=1 if evento[5] else 0, key="edit_tipo")
+        cor_evento = st.color_picker("Cor do Evento:", value=evento[6] or "#FF4B4B", key="edit_cor")
+    
+    # CORREÇÃO: Botões regulares (não dentro de form)
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
+    
+    with col_btn1:
+        if st.button("💾 Salvar Alterações", use_container_width=True, key="salvar_edicao"):
             if not titulo:
                 st.error("❌ O campo Título é obrigatório")
-                return
-            
-            if atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
+            else:
+                if atualizar_evento(evento_id, titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
+                    st.session_state.editing_event = None
+                    st.rerun()
+    
+    with col_btn2:
+        if st.button("🗑️ Excluir Evento", use_container_width=True, key="excluir_edicao"):
+            if excluir_evento(evento_id):
                 st.session_state.editing_event = None
                 st.rerun()
+    
+    with col_btn3:
+        if st.button("❌ Cancelar", use_container_width=True, key="cancelar_edicao"):
+            st.session_state.editing_event = None
+            st.rerun()
 
 # =============================================================================
 # FUNÇÕES PARA AGENDA DE CONTATOS - LAYOUT MOBILE COM TODAS INFORMAÇÕES
