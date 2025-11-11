@@ -1099,7 +1099,7 @@ def criar_backup_incremental():
         return None
 
 # =============================================================================
-# FUNÇÕES PARA EDIÇÃO DE LANÇAMENTOS E EVENTOS
+# FUNÇÕES PARA EDIÇÃO DE LANÇAMENTOS E EVENTOS - CORRIGIDAS
 # =============================================================================
 
 def show_editar_lancamento(lancamento_id, mes):
@@ -1148,7 +1148,7 @@ def show_editar_lancamento(lancamento_id, mes):
                 st.rerun()
 
 def show_editar_evento(evento_id):
-    """Interface para editar um evento existente"""
+    """Interface para editar um evento existente - CORRIGIDA"""
     evento = get_evento_by_id(evento_id)
     
     if not evento:
@@ -1167,13 +1167,28 @@ def show_editar_evento(evento_id):
             data_evento = st.date_input("Data do Evento:*", value=evento[3])  # data_evento
         
         with col2:
-            hora_evento = st.time_input("Hora do Evento:", value=evento[4] if evento[4] else time(19, 0))  # hora_evento
+            # CORREÇÃO: Tratamento seguro para hora_evento
+            hora_default = time(19, 0)
+            if evento[4]:  # hora_evento
+                if isinstance(evento[4], str):
+                    try:
+                        hora_default = datetime.strptime(evento[4], '%H:%M:%S').time()
+                    except ValueError:
+                        try:
+                            hora_default = datetime.strptime(evento[4], '%H:%M').time()
+                        except ValueError:
+                            hora_default = time(19, 0)
+                else:
+                    hora_default = evento[4]
+            
+            hora_evento = st.time_input("Hora do Evento:", value=hora_default)
             tipo_evento = st.selectbox("Tipo de Evento:", [
                 "", "Iniciação", "Elevação", "Exaltação", "Sessão Economica", 
                 "Jantar Ritualistico", "Reunião", "Feriado", "Entrega", "Compromisso"
             ], index=1 if evento[5] else 0)  # tipo_evento
             cor_evento = st.color_picker("Cor do Evento:", value=evento[6] or "#FF4B4B")  # cor_evento
         
+        # CORREÇÃO: Botão de submit obrigatório para forms
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
@@ -1677,7 +1692,7 @@ def show_main_application():
             logout_user()
             st.rerun()
     
-    # Resto da função mantido igual...
+    # Navegação principal
     if selected_menu == "📊 Livro Caixa":
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
