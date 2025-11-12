@@ -15,9 +15,16 @@ from pymysql import Error
 from PIL import Image, ImageDraw, ImageFont
 import requests
 from io import BytesIO
-from reportlab.lib.pagesizes import landscape, A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
+
+# Tentar importar reportlab, mas lidar com a ausência graciosamente
+try:
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    st.warning("⚠️ A biblioteca ReportLab não está instalada. O gerador de convites PDF não estará disponível.")
 
 # Configuração da página
 st.set_page_config(
@@ -1600,6 +1607,49 @@ def show_gerador_convites():
         st.warning("⚠️ Você precisa de permissão de edição para acessar o gerador de convites")
         return
     
+    # Verificar se reportlab está disponível
+    if not REPORTLAB_AVAILABLE:
+        st.error("""
+        ❌ **Biblioteca ReportLab não encontrada!**
+        
+        Para usar o gerador de convites PDF, instale a biblioteca ReportLab:
+        
+        ```bash
+        pip install reportlab
+        ```
+        
+        Ou se estiver usando Streamlit Cloud, adicione ao arquivo `requirements.txt`:
+        ```
+        reportlab
+        ```
+        
+        **Funcionalidades disponíveis sem ReportLab:**
+        - Visualização de modelos
+        - Pré-visualização de textos
+        - Configuração de textos e cores
+        """)
+        
+        # Mostrar instruções de instalação
+        with st.expander("📋 Instruções de Instalação"):
+            st.markdown("""
+            ### Como instalar o ReportLab:
+            
+            **1. Instalação Local:**
+            ```bash
+            pip install reportlab
+            ```
+            
+            **2. Streamlit Cloud:**
+            Adicione esta linha ao seu arquivo `requirements.txt`:
+            ```
+            reportlab>=4.0.0
+            ```
+            
+            **3. Reinicie a aplicação** após a instalação.
+            """)
+        
+        return
+    
     # Informações sobre a funcionalidade
     st.info("""
     **📋 Sobre o Gerador de Convites:**
@@ -1916,7 +1966,10 @@ def show_main_application():
         st.write("- O calendário ajuda no planejamento de eventos")
         st.write("- A agenda de contatos mostra informações dos membros")
         if user_can_edit():
-            st.write("- Use o Gerador de Convites para criar convites personalizados")
+            if REPORTLAB_AVAILABLE:
+                st.write("- Use o Gerador de Convites para criar convites personalizados")
+            else:
+                st.write("- ⚠️ Gerador de Convites (PDF não disponível - instale reportlab)")
         if user_is_admin():
             st.write("- Como admin, você pode gerenciar usuários")
         
@@ -1945,6 +1998,8 @@ def show_main_application():
         visualizar_agenda_contatos()
     elif selected_menu == "🎉 Gerador de Convites" and user_can_edit():
         show_gerador_convites()
+
+# ... (o restante das funções permanece igual - show_livro_caixa, show_calendario, etc.)
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
