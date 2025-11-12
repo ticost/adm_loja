@@ -1,4 +1,4 @@
-# app.py - SISTEMA COMPLETO LIVRO CAIXA COM AGENDA DE CONTATOS
+# app.py - SISTEMA COMPLETO LIVRO CAIXA COM AGENDA DE CONTATOS E GERADOR DE CONVITES
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, time, timedelta
@@ -12,9 +12,12 @@ import shutil
 from dateutil.relativedelta import relativedelta
 import pymysql
 from pymysql import Error
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import requests
 from io import BytesIO
+from reportlab.lib.pagesizes import landscape, A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 # Configuração da página
 st.set_page_config(
@@ -1585,6 +1588,231 @@ def visualizar_agenda_contatos():
             st.markdown("---")
 
 # =============================================================================
+# FUNÇÕES PARA O GERADOR DE CONVITES
+# =============================================================================
+
+def show_gerador_convites():
+    """Interface do Gerador de Convites - Integração do app_convites.py"""
+    st.header("🎉 Gerador de Convites")
+    
+    # Verificação de permissão
+    if not user_can_edit():
+        st.warning("⚠️ Você precisa de permissão de edição para acessar o gerador de convites")
+        return
+    
+    # Informações sobre a funcionalidade
+    st.info("""
+    **📋 Sobre o Gerador de Convites:**
+    - Gere convites personalizados para eventos da loja
+    - Use modelos pré-definidos ou faça upload do seu próprio
+    - Customize textos, fontes e cores
+    - Exporte em formato PDF para impressão
+    """)
+    
+    # Divisão em abas para organização
+    tab1, tab2 = st.tabs(["🛠️ Gerar Convite", "ℹ️ Instruções"])
+    
+    with tab1:
+        # Código do app_convites.py integrado aqui
+        gerar_convites_interface()
+    
+    with tab2:
+        show_instrucoes_convites()
+
+def carregar_fonte_pil(tamanho):
+    """Carrega fonte PIL para medir texto"""
+    caminhos = [
+        "C:/Windows/Fonts/times.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/Library/Fonts/Times New Roman.ttf"
+    ]
+    for p in caminhos:
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, tamanho)
+            except:
+                pass
+    return ImageFont.load_default()
+
+def gerar_convites_interface():
+    """Interface principal do gerador de convites"""
+    
+    # === Upload do modelo ===
+    uploaded_file = st.file_uploader("📤 Faça upload do modelo do convite (JPG/PNG)", type=["jpg", "jpeg", "png"])
+
+    # === Posições fixas ===
+    posicoes_padrao = [
+        {"x": 300, "y": 240, "tamanho_default": 18, "descricao": "Nome do Venerável Mestre"},
+        {"x": 300, "y": 300, "tamanho_default": 13, "descricao": "Descrição da sessão"},
+        {"x": 350, "y": 330, "tamanho_default": 23, "descricao": "Nome do candidato 1"},
+        {"x": 350, "y": 390, "tamanho_default": 23, "descricao": "Nome do candidato 2"},
+        {"x": 268, "y": 465, "tamanho_default": 10, "descricao": "Data e hora do evento"},
+    ]
+
+    if uploaded_file:
+        # Carregar modelo e ajustar para A4 paisagem (842x595)
+        modelo = Image.open(uploaded_file).convert("RGBA")
+        modelo = modelo.resize((842, 595))
+
+        st.subheader("🖼️ Modelo carregado")
+        st.image(modelo, use_column_width=True)
+
+        st.write("---")
+        st.subheader("✏️ Configure os textos do convite")
+
+        textos_config = []
+        for i in range(5):
+            st.markdown(f"**Texto {i+1} - {posicoes_padrao[i]['descricao']}**")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                conteudo = st.text_input(
+                    f"Conteúdo do texto {i+1}", 
+                    value="", 
+                    key=f"conteudo_{i}",
+                    placeholder=f"Digite o {posicoes_padrao[i]['descricao'].lower()}"
+                )
+            
+            with col2:
+                tamanho = st.number_input(
+                    f"Tamanho da fonte",
+                    min_value=6,
+                    max_value=120,
+                    value=posicoes_padrao[i]["tamanho_default"],
+                    key=f"tamanho_{i}"
+                )
+            
+            cor = st.color_picker(f"Cor do texto {i+1}", "#000000", key=f"cor_{i}")
+            st.write("---")
+
+            textos_config.append({
+                "conteudo": conteudo,
+                "x": posicoes_padrao[i]["x"],
+                "y": posicoes_padrao[i]["y"],
+                "tamanho": tamanho,
+                "cor": cor,
+                "descricao": posicoes_padrao[i]["descricao"]
+            })
+
+        # --- Pré-visualização opcional com texto ---
+        mostrar_texto = st.checkbox("👁️ Mostrar pré-visualização com textos", value=True)
+        if mostrar_texto:
+            preview = modelo.copy()
+            draw = ImageDraw.Draw(preview)
+            
+            for t in textos_config:
+                if t["conteudo"].strip():
+                    pil_font = carregar_fonte_pil(t["tamanho"])
+                    cor_rgb = tuple(int(t["cor"].lstrip("#")[i:i+2], 16) for i in (0,2,4))
+                    draw.text((t["x"], t["y"]), t["conteudo"], font=pil_font, fill=cor_rgb)
+            
+            st.image(preview, caption="Pré-visualização do convite", use_column_width=True)
+
+        # --- Gerar PDF ---
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("📄 Gerar PDF do Convite", use_container_width=True):
+                # Verificar se há pelo menos algum texto preenchido
+                textos_preenchidos = any(t["conteudo"].strip() for t in textos_config)
+                if not textos_preenchidos:
+                    st.error("❌ Preencha pelo menos um texto para gerar o convite")
+                    return
+                
+                try:
+                    buffer = io.BytesIO()
+                    c = canvas.Canvas(buffer, pagesize=landscape(A4))
+                    largura_pagina, altura_pagina = landscape(A4)
+
+                    # Inserir imagem de fundo
+                    img_temp = io.BytesIO()
+                    modelo.save(img_temp, format="PNG")
+                    img_temp.seek(0)
+                    c.drawImage(ImageReader(img_temp), 0, 0, width=largura_pagina, height=altura_pagina)
+
+                    # Adicionar textos no PDF
+                    for t in textos_config:
+                        if not t["conteudo"].strip():
+                            continue
+                            
+                        # Medir altura do texto
+                        pil_font = carregar_fonte_pil(t["tamanho"])
+                        try:
+                            bbox = pil_font.getbbox(t["conteudo"])
+                            text_height = bbox[3] - bbox[1]
+                        except Exception:
+                            text_height = t["tamanho"]
+
+                        # Converter coordenada Y
+                        y_pdf = altura_pagina - t["y"] - text_height
+
+                        # Aplicar cor e fonte
+                        r, g, b = tuple(int(t["cor"].lstrip("#")[i:i+2], 16) for i in (0,2,4))
+                        c.setFillColorRGB(r/255.0, g/255.0, b/255.0)
+                        c.setFont("Times-Roman", t["tamanho"])
+                        c.drawString(t["x"], y_pdf, t["conteudo"])
+
+                    c.showPage()
+                    c.save()
+                    buffer.seek(0)
+
+                    st.success("✅ Convite gerado com sucesso!")
+                    
+                    # Botão de download
+                    st.download_button(
+                        "📥 Baixar PDF do Convite", 
+                        data=buffer, 
+                        file_name=f"convite_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf", 
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                except Exception as e:
+                    st.error(f"❌ Erro ao gerar PDF: {e}")
+        
+        with col2:
+            if st.button("🔄 Limpar Formulário", use_container_width=True):
+                st.rerun()
+
+    else:
+        st.info("📎 Faça upload do modelo do convite (JPG/PNG) para começar.")
+
+def show_instrucoes_convites():
+    """Exibe instruções detalhadas para o gerador de convites"""
+    st.subheader("📘 Instruções Detalhadas")
+    
+    st.markdown("""
+    ### 🎯 Como usar o Gerador de Convites
+    
+    **1. Preparação do Modelo:**
+    - Prepare uma imagem JPG ou PNG do modelo do convite
+    - Dimensão recomendada: proporção A4 paisagem (842x595 pixels)
+    - Deixe áreas em branco para os textos que serão inseridos
+    
+    **2. Configuração dos Textos:**
+    - **Texto 1:** Nome do Venerável Mestre (fonte 18)
+    - **Texto 2:** Descrição da sessão ou evento (fonte 13) 
+    - **Texto 3:** Nome do primeiro candidato (fonte 23)
+    - **Texto 4:** Nome do segundo candidato (fonte 23)
+    - **Texto 5:** Data, hora e local do evento (fonte 10)
+    
+    **3. Personalização:**
+    - Ajuste o tamanho da fonte conforme necessário
+    - Escolha cores que contrastem com o fundo do modelo
+    - Use a pré-visualização para verificar o resultado
+    
+    **4. Geração do PDF:**
+    - Clique em "Gerar PDF do Convite" para criar o arquivo final
+    - O PDF será gerado no formato A4 paisagem
+    - Faça o download e imprima em alta qualidade
+    
+    ### 💡 Dicas Importantes:
+    - Use modelos com boa resolução para evitar pixelização
+    - Teste diferentes tamanhos de fonte para melhor legibilidade
+    - Verifique sempre a pré-visualização antes de gerar o PDF final
+    - Para melhores resultados na impressão, use papel de qualidade
+    """)
+
+# =============================================================================
 # INTERFACE PRINCIPAL
 # =============================================================================
 
@@ -1663,13 +1891,17 @@ def show_main_application():
         st.write(f"**Permissão:** {PERMISSOES.get(st.session_state.permissao, st.session_state.permissao)}")
         st.markdown("---")
         
-        # Resto do menu de navegação (mantido igual)
+        # MENU DE NAVEGAÇÃO ATUALIZADO - ADICIONANDO GERADOR DE CONVITES
         menu_options = ["📊 Livro Caixa", "📅 Calendário"]
         
         if user_can_edit():
             menu_options.append("⚙️ Configurações")
         
         menu_options.append("📒 Agenda de Contatos")
+        
+        # ADIÇÃO DO GERADOR DE CONVITES - disponível para quem pode editar
+        if user_can_edit():
+            menu_options.append("🎉 Gerador de Convites")
         
         if user_is_admin():
             menu_options.append("👥 Gerenciar Usuários")
@@ -1678,11 +1910,13 @@ def show_main_application():
         
         st.markdown("---")
         
-        # Informações do sistema
+        # Informações do sistema ATUALIZADAS
         st.write("**💡 Dicas:**")
         st.write("- Use o Livro Caixa para registrar entradas e saídas")
         st.write("- O calendário ajuda no planejamento de eventos")
         st.write("- A agenda de contatos mostra informações dos membros")
+        if user_can_edit():
+            st.write("- Use o Gerador de Convites para criar convites personalizados")
         if user_is_admin():
             st.write("- Como admin, você pode gerenciar usuários")
         
@@ -1698,7 +1932,7 @@ def show_main_application():
             logout_user()
             st.rerun()
     
-    # Navegação principal
+    # NAVEGAÇÃO PRINCIPAL ATUALIZADA
     if selected_menu == "📊 Livro Caixa":
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
@@ -1709,6 +1943,8 @@ def show_main_application():
         show_gerenciar_usuarios()
     elif selected_menu == "📒 Agenda de Contatos":
         visualizar_agenda_contatos()
+    elif selected_menu == "🎉 Gerador de Convites" and user_can_edit():
+        show_gerador_convites()
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
