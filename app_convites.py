@@ -30,11 +30,11 @@ def main():
     Posições X/Y e alinhamento são fixos. Fonte: Times-Roman.
 
     Posições padrão (não alterar):
-    - Texto 1: X=300, Y=240, Fonte=18 — Nome do VM  
-    - Texto 2: X=300, Y=300, Fonte=13 — Descrição da sessão  
-    - Texto 3: X=350, Y=330, Fonte=23 — Nome candidato 1  
-    - Texto 4: X=350, Y=390, Fonte=23 — Nome candidato 2  
-    - Texto 5: X=268, Y=465, Fonte=10 — Data e hora
+    - Texto 1: X=300, Y=240, Fonte=18 — Venerável Mestre  
+    - Texto 2: X=300, Y=300, Fonte=13 — Tipo de sessão  
+    - Texto 3: X=350, Y=330, Fonte=23 — Nome da pessoa 1ª  
+    - Texto 4: X=350, Y=390, Fonte=23 — Nome da pessoa 2ª  
+    - Texto 5: X=268, Y=465, Fonte=10 — Data e hora de início
         """)
 
     # === Upload do modelo ===
@@ -83,32 +83,141 @@ def main():
             st.subheader("✏️ Preencha os textos (Times-Roman, alinhamento à esquerda)")
 
             textos_config = []
-            for i in range(5):
-                st.markdown(f"**Texto {i+1}**")
-                conteudo = st.text_input(f"Conteúdo do texto {i+1}", value="", key=f"conteudo_{i}")
-                colx, coly, colfont = st.columns([1, 1, 2])
-                with colx:
-                    st.number_input(f"Posição X (fixa)", value=posicoes_padrao[i]["x"], disabled=True, key=f"x_{i}")
-                with coly:
-                    st.number_input(f"Posição Y (fixa)", value=posicoes_padrao[i]["y"], disabled=True, key=f"y_{i}")
-                with colfont:
-                    tamanho = st.number_input(
-                        f"Tamanho da fonte do texto {i+1}",
-                        min_value=6,
-                        max_value=120,
-                        value=posicoes_padrao[i]["tamanho_default"],
-                        key=f"tamanho_{i}"
-                    )
-                cor = st.color_picker(f"Cor do texto {i+1}", "#000000", key=f"cor_{i}")
-                st.write("---")
+            
+            # Texto 1 - Venerável Mestre
+            st.markdown(f"**Texto 1 - Venerável Mestre**")
+            conteudo = st.text_input(f"Conteúdo do texto 1 - Venerável Mestre", value="", key=f"conteudo_0")
+            colx, coly, colfont = st.columns([1, 1, 2])
+            with colx:
+                st.number_input(f"Posição X (fixa)", value=posicoes_padrao[0]["x"], disabled=True, key=f"x_0")
+            with coly:
+                st.number_input(f"Posição Y (fixa)", value=posicoes_padrao[0]["y"], disabled=True, key=f"y_0")
+            with colfont:
+                tamanho = st.number_input(
+                    f"Tamanho da fonte do texto 1 - Venerável Mestre",
+                    min_value=6,
+                    max_value=120,
+                    value=posicoes_padrao[0]["tamanho_default"],
+                    key=f"tamanho_0"
+                )
+            cor = st.color_picker(f"Cor do texto 1 - Venerável Mestre", "#000000", key=f"cor_0")
+            st.write("---")
 
-                textos_config.append({
-                    "conteudo": conteudo,
-                    "x": posicoes_padrao[i]["x"],
-                    "y": posicoes_padrao[i]["y"],
-                    "tamanho": tamanho,
-                    "cor": cor
-                })
+            textos_config.append({
+                "conteudo": conteudo,
+                "x": posicoes_padrao[0]["x"],
+                "y": posicoes_padrao[0]["y"],
+                "tamanho": tamanho,
+                "cor": cor
+            })
+
+            # Texto 2 - Tipo de sessão
+            st.markdown(f"**Texto 2 - Tipo de sessão**")
+            conteudo = st.text_input(f"Conteúdo do texto 2 - Tipo de sessão", value="", key=f"conteudo_1")
+            colx, coly, colfont = st.columns([1, 1, 2])
+            with colx:
+                st.number_input(f"Posição X (fixa)", value=posicoes_padrao[1]["x"], disabled=True, key=f"x_1")
+            with coly:
+                st.number_input(f"Posição Y (fixa)", value=posicoes_padrao[1]["y"], disabled=True, key=f"y_1")
+            with colfont:
+                tamanho = st.number_input(
+                    f"Tamanho da fonte do texto 2 - Tipo de sessão",
+                    min_value=6,
+                    max_value=120,
+                    value=posicoes_padrao[1]["tamanho_default"],
+                    key=f"tamanho_1"
+                )
+            cor = st.color_picker(f"Cor do texto 2 - Tipo de sessão", "#000000", key=f"cor_1")
+            st.write("---")
+
+            textos_config.append({
+                "conteudo": conteudo,
+                "x": posicoes_padrao[1]["x"],
+                "y": posicoes_padrao[1]["y"],
+                "tamanho": tamanho,
+                "cor": cor
+            })
+
+            # Texto 3 - Nome da pessoa 1ª
+            st.markdown(f"**Texto 3 - Nome da pessoa 1ª**")
+            conteudo = st.text_input(f"Conteúdo do texto 3 - Nome da pessoa 1ª", value="", key=f"conteudo_2")
+            colx, coly, colfont = st.columns([1, 1, 2])
+            with colx:
+                st.number_input(f"Posição X (fixa)", value=posicoes_padrao[2]["x"], disabled=True, key=f"x_2")
+            with coly:
+                st.number_input(f"Posição Y (fixa)", value=posicoes_padrao[2]["y"], disabled=True, key=f"y_2")
+            with colfont:
+                tamanho = st.number_input(
+                    f"Tamanho da fonte do texto 3 - Nome da pessoa 1ª",
+                    min_value=6,
+                    max_value=120,
+                    value=posicoes_padrao[2]["tamanho_default"],
+                    key=f"tamanho_2"
+                )
+            cor = st.color_picker(f"Cor do texto 3 - Nome da pessoa 1ª", "#000000", key=f"cor_2")
+            st.write("---")
+
+            textos_config.append({
+                "conteudo": conteudo,
+                "x": posicoes_padrao[2]["x"],
+                "y": posicoes_padrao[2]["y"],
+                "tamanho": tamanho,
+                "cor": cor
+            })
+
+            # Texto 4 - Nome da pessoa 2ª
+            st.markdown(f"**Texto 4 - Nome da pessoa 2ª**")
+            conteudo = st.text_input(f"Conteúdo do texto 4 - Nome da pessoa 2ª", value="", key=f"conteudo_3")
+            colx, coly, colfont = st.columns([1, 1, 2])
+            with colx:
+                st.number_input(f"Posição X (fixa)", value=posicoes_padrao[3]["x"], disabled=True, key=f"x_3")
+            with coly:
+                st.number_input(f"Posição Y (fixa)", value=posicoes_padrao[3]["y"], disabled=True, key=f"y_3")
+            with colfont:
+                tamanho = st.number_input(
+                    f"Tamanho da fonte do texto 4 - Nome da pessoa 2ª",
+                    min_value=6,
+                    max_value=120,
+                    value=posicoes_padrao[3]["tamanho_default"],
+                    key=f"tamanho_3"
+                )
+            cor = st.color_picker(f"Cor do texto 4 - Nome da pessoa 2ª", "#000000", key=f"cor_3")
+            st.write("---")
+
+            textos_config.append({
+                "conteudo": conteudo,
+                "x": posicoes_padrao[3]["x"],
+                "y": posicoes_padrao[3]["y"],
+                "tamanho": tamanho,
+                "cor": cor
+            })
+
+            # Texto 5 - Inserir a data e hora de início
+            st.markdown(f"**Texto 5 - Data e hora de início**")
+            conteudo = st.text_input(f"Conteúdo do texto 5 - Data e hora de início", value="", key=f"conteudo_4")
+            colx, coly, colfont = st.columns([1, 1, 2])
+            with colx:
+                st.number_input(f"Posição X (fixa)", value=posicoes_padrao[4]["x"], disabled=True, key=f"x_4")
+            with coly:
+                st.number_input(f"Posição Y (fixa)", value=posicoes_padrao[4]["y"], disabled=True, key=f"y_4")
+            with colfont:
+                tamanho = st.number_input(
+                    f"Tamanho da fonte do texto 5 - Data e hora de início",
+                    min_value=6,
+                    max_value=120,
+                    value=posicoes_padrao[4]["tamanho_default"],
+                    key=f"tamanho_4"
+                )
+            cor = st.color_picker(f"Cor do texto 5 - Data e hora de início", "#000000", key=f"cor_4")
+            st.write("---")
+
+            textos_config.append({
+                "conteudo": conteudo,
+                "x": posicoes_padrao[4]["x"],
+                "y": posicoes_padrao[4]["y"],
+                "tamanho": tamanho,
+                "cor": cor
+            })
 
             # --- Pré-visualização opcional com texto ---
             mostrar_texto = st.checkbox("👁️ Mostrar textos na pré-visualização (opcional)", value=True)
