@@ -60,6 +60,22 @@ def init_session_state():
         st.session_state.current_page = "📊 Livro Caixa"
 
 # =============================================================================
+# FUNÇÃO PARA IMPORTAR O MÓDULO DE CONVITES
+# =============================================================================
+def importar_modulo_convites():
+    """Importa e executa o módulo de convites se disponível"""
+    try:
+        # Tenta importar o módulo de convites
+        from app_convites import main as convites_main
+        return convites_main
+    except ImportError as e:
+        st.error(f"❌ Módulo de convites não disponível: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar módulo de convites: {e}")
+        return None
+
+# =============================================================================
 # FUNÇÃO PARA CARREGAR IMAGEM DO LOGO
 # =============================================================================
 def carregar_imagem_logo(nome_arquivo):
@@ -1213,6 +1229,7 @@ def show_editar_evento(evento_id):
         if st.button("❌ Cancelar", use_container_width=True, key="cancelar_edicao"):
             st.session_state.editing_event = None
             st.rerun()
+
 # =============================================================================
 # FUNÇÕES PARA AGENDA DE CONTATOS - LAYOUT MOBILE COM TODAS INFORMAÇÕES
 # =============================================================================
@@ -1662,13 +1679,17 @@ def show_main_application():
         st.write(f"**Permissão:** {PERMISSOES.get(st.session_state.permissao, st.session_state.permissao)}")
         st.markdown("---")
         
-        # Resto do menu de navegação (mantido igual)
+        # Menu de navegação - INCLUINDO CONVITES
         menu_options = ["📊 Livro Caixa", "📅 Calendário"]
         
         if user_can_edit():
             menu_options.append("⚙️ Configurações")
         
         menu_options.append("📒 Agenda de Contatos")
+        
+        # ADICIONAR MÓDULO DE CONVITES (apenas para admin e editor)
+        if user_can_edit():
+            menu_options.append("🎫 Sistema de Convites")
         
         if user_is_admin():
             menu_options.append("👥 Gerenciar Usuários")
@@ -1682,6 +1703,8 @@ def show_main_application():
         st.write("- Use o Livro Caixa para registrar entradas e saídas")
         st.write("- O calendário ajuda no planejamento de eventos")
         st.write("- A agenda de contatos mostra informações dos membros")
+        if user_can_edit():
+            st.write("- Como editor/admin, você pode gerenciar convites")
         if user_is_admin():
             st.write("- Como admin, você pode gerenciar usuários")
         
@@ -1697,7 +1720,7 @@ def show_main_application():
             logout_user()
             st.rerun()
     
-    # Navegação principal
+    # Navegação principal - INCLUINDO CONVITES
     if selected_menu == "📊 Livro Caixa":
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
@@ -1708,6 +1731,42 @@ def show_main_application():
         show_gerenciar_usuarios()
     elif selected_menu == "📒 Agenda de Contatos":
         visualizar_agenda_contatos()
+    elif selected_menu == "🎫 Sistema de Convites" and user_can_edit():
+        show_sistema_convites()
+
+def show_sistema_convites():
+    """Exibe o sistema de convites"""
+    st.header("🎫 Sistema de Convites")
+    
+    # Verificar permissões
+    if not user_can_edit():
+        st.warning("⚠️ Apenas administradores e editores podem acessar o sistema de convites")
+        return
+    
+    # Importar e executar o módulo de convites
+    convites_main = importar_modulo_convites()
+    
+    if convites_main:
+        try:
+            # Executar o módulo de convites
+            convites_main()
+        except Exception as e:
+            st.error(f"❌ Erro ao executar módulo de convites: {e}")
+            st.info("📋 Verifique se o arquivo `app_convites.py` está presente e configurado corretamente.")
+    else:
+        st.error("❌ Módulo de convites não disponível")
+        st.info("""
+        **Para usar o sistema de convites:**
+        1. Certifique-se de que o arquivo `app_convites.py` está na mesma pasta
+        2. Verifique se todas as dependências estão instaladas
+        3. Recarregue a página
+        
+        **Funcionalidades do sistema de convites:**
+        - Criação e gestão de convites para eventos
+        - Controle de convidados e confirmações
+        - Geração de relatórios de presença
+        - Envio de lembretes automáticos
+        """)
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
@@ -1822,53 +1881,10 @@ def show_lancamentos_mes(mes, df_lancamentos):
         df_display['saida'] = df_display['saida'].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
         df_display['saldo'] = df_display['saldo'].apply(lambda x: f"R$ {x:,.2f}")
         
-        # Exibir cabeçalhos da tabela
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 2, 2, 2, 1, 1])
-        with col1:
-            st.write("**Data**")
-        with col2:
-            st.write("**Histórico**")
-        with col3:
-            st.write("**Entrada**")
-        with col4:
-            st.write("**Saída**")
-        with col5:
-            st.write("**Saldo**")
-        with col6:
-            st.write("**Editar**")
-        with col7:
-            st.write("**Excluir**")
+        # Exibir tabela simplificada
+        st.dataframe(df_display[['data', 'historico', 'entrada', 'saida', 'saldo']], 
+                    use_container_width=True, hide_index=True)
         
-        st.markdown("---")
-        
-        # Exibir cada linha com ações
-        for _, row in df_display.iterrows():
-            col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 2, 2, 2, 1, 1])
-            
-            with col1:
-                st.write(row['data'])
-            with col2:
-                st.write(f"**{row['historico']}**")
-                if row['complemento']:
-                    st.write(f"_{row['complemento']}_")
-            with col3:
-                st.write(row['entrada'])
-            with col4:
-                st.write(row['saida'])
-            with col5:
-                st.write(row['saldo'])
-            with col6:
-                if user_can_edit():
-                    if st.button("✏️", key=f"edit_{row['id']}"):
-                        st.session_state.editing_lancamento = row['id']
-                        st.rerun()
-            with col7:
-                if user_can_edit():
-                    if st.button("🗑️", key=f"del_{row['id']}"):
-                        if excluir_lancamento(row['id'], mes):
-                            st.rerun()
-            
-            st.markdown("---")
     else:
         # Visualização em cards
         for _, lancamento in df_lancamentos.iterrows():
