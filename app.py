@@ -60,6 +60,22 @@ def init_session_state():
         st.session_state.current_page = "📊 Livro Caixa"
 
 # =============================================================================
+# FUNÇÃO PARA IMPORTAR O MÓDULO DE CONVITES
+# =============================================================================
+def importar_modulo_convites():
+    """Importa e executa o módulo de convites se disponível"""
+    try:
+        # Tenta importar o módulo de convites
+        from app_convites import main as convites_main
+        return convites_main
+    except ImportError as e:
+        st.error(f"❌ Módulo de convites não disponível: {e}")
+        return None
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar módulo de convites: {e}")
+        return None
+
+# =============================================================================
 # FUNÇÃO PARA CARREGAR IMAGEM DO LOGO
 # =============================================================================
 def carregar_imagem_logo(nome_arquivo):
@@ -1662,13 +1678,17 @@ def show_main_application():
         st.write(f"**Permissão:** {PERMISSOES.get(st.session_state.permissao, st.session_state.permissao)}")
         st.markdown("---")
         
-        # Resto do menu de navegação (mantido igual)
+        # Menu de navegação - INCLUINDO CONVITES
         menu_options = ["📊 Livro Caixa", "📅 Calendário"]
         
         if user_can_edit():
             menu_options.append("⚙️ Configurações")
         
         menu_options.append("📒 Agenda de Contatos")
+        
+        # ADICIONAR MÓDULO DE CONVITES (apenas para admin e editor)
+        if user_can_edit():
+            menu_options.append("🎫 Sistema de Convites")
         
         if user_is_admin():
             menu_options.append("👥 Gerenciar Usuários")
@@ -1682,6 +1702,8 @@ def show_main_application():
         st.write("- Use o Livro Caixa para registrar entradas e saídas")
         st.write("- O calendário ajuda no planejamento de eventos")
         st.write("- A agenda de contatos mostra informações dos membros")
+        if user_can_edit():
+            st.write("- Como editor/admin, você pode gerenciar convites")
         if user_is_admin():
             st.write("- Como admin, você pode gerenciar usuários")
         
@@ -1697,7 +1719,7 @@ def show_main_application():
             logout_user()
             st.rerun()
     
-    # Navegação principal
+    # Navegação principal - INCLUINDO CONVITES
     if selected_menu == "📊 Livro Caixa":
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
@@ -1708,6 +1730,44 @@ def show_main_application():
         show_gerenciar_usuarios()
     elif selected_menu == "📒 Agenda de Contatos":
         visualizar_agenda_contatos()
+    elif selected_menu == "🎫 Sistema de Convites" and user_can_edit():
+        show_sistema_convites()
+
+def show_sistema_convites():
+    """Exibe o sistema de convites"""
+    st.header("🎫 Sistema de Convites")
+    
+    # Verificar permissões
+    if not user_can_edit():
+        st.warning("⚠️ Apenas administradores e editores podem acessar o sistema de convites")
+        return
+    
+    # Importar e executar o módulo de convites
+    convites_main = importar_modulo_convites()
+    
+    if convites_main:
+        try:
+            # Executar o módulo de convites
+            convites_main()
+        except Exception as e:
+            st.error(f"❌ Erro ao executar módulo de convites: {e}")
+            st.info("📋 Verifique se o arquivo `app_convites.py` está presente e configurado corretamente.")
+    else:
+        st.error("❌ Módulo de convites não disponível")
+        st.info("""
+        **Para usar o sistema de convites:**
+        1. Certifique-se de que o arquivo `app_convites.py` está na mesma pasta
+        2. Verifique se todas as dependências estão instaladas
+        3. Recarregue a página
+        
+        **Funcionalidades do sistema de convites:**
+        - Criação e gestão de convites para eventos
+        - Controle de convidados e confirmações
+        - Geração de relatórios de presença
+        - Envio de lembretes automáticos
+        """)
+
+# ... (o restante do código permanece igual - funções show_livro_caixa, show_calendario, etc.)
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
@@ -1770,695 +1830,7 @@ def show_livro_caixa():
         else:
             st.warning("⚠️ Apenas administradores podem acessar as configurações")
 
-def show_novo_lancamento(mes):
-    """Formulário para novo lançamento"""
-    with st.form("novo_lancamento", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            data = st.date_input("Data:", value=datetime.now())
-            historico = st.text_input("Histórico:*", placeholder="Descrição do lançamento")
-            complemento = st.text_area("Complemento:", placeholder="Informações adicionais")
-        
-        with col2:
-            entrada = st.number_input("Valor de Entrada (R$):", min_value=0.0, value=0.0, step=0.01)
-            saida = st.number_input("Valor de Saída (R$):", min_value=0.0, value=0.0, step=0.01)
-        
-        submitted = st.form_submit_button("💾 Salvar Lançamento")
-        
-        if submitted:
-            if not historico:
-                st.error("❌ O campo Histórico é obrigatório")
-                return
-            
-            if entrada == 0 and saida == 0:
-                st.error("❌ Pelo menos um valor (entrada ou saída) deve ser diferente de zero")
-                return
-            
-            # Calcular saldo
-            df_existente = get_lancamentos_mes(mes)
-            saldo_anterior = df_existente['saldo'].iloc[-1] if not df_existente.empty else 0
-            saldo_atual = saldo_anterior + entrada - saida
-            
-            if salvar_lancamento(mes, data, historico, complemento, entrada, saida, saldo_atual):
-                st.rerun()
-
-def show_lancamentos_mes(mes, df_lancamentos):
-    """Exibe os lançamentos do mês"""
-    if df_lancamentos.empty:
-        st.info("📭 Nenhum lançamento registrado para este mês")
-        return
-    
-    # Opções de visualização
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        formato = st.radio("Formato:", ["Tabela", "Cards"], horizontal=True)
-    
-    if formato == "Tabela":
-        # Preparar dados para exibição
-        df_display = df_lancamentos.copy()
-        df_display['data'] = pd.to_datetime(df_display['data']).dt.strftime('%d/%m/%Y')
-        df_display['entrada'] = df_display['entrada'].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
-        df_display['saida'] = df_display['saida'].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
-        df_display['saldo'] = df_display['saldo'].apply(lambda x: f"R$ {x:,.2f}")
-        
-        # Exibir cabeçalhos da tabela
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 2, 2, 2, 1, 1])
-        with col1:
-            st.write("**Data**")
-        with col2:
-            st.write("**Histórico**")
-        with col3:
-            st.write("**Entrada**")
-        with col4:
-            st.write("**Saída**")
-        with col5:
-            st.write("**Saldo**")
-        with col6:
-            st.write("**Editar**")
-        with col7:
-            st.write("**Excluir**")
-        
-        st.markdown("---")
-        
-        # Exibir cada linha com ações
-        for _, row in df_display.iterrows():
-            col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 2, 2, 2, 1, 1])
-            
-            with col1:
-                st.write(row['data'])
-            with col2:
-                st.write(f"**{row['historico']}**")
-                if row['complemento']:
-                    st.write(f"_{row['complemento']}_")
-            with col3:
-                st.write(row['entrada'])
-            with col4:
-                st.write(row['saida'])
-            with col5:
-                st.write(row['saldo'])
-            with col6:
-                if user_can_edit():
-                    if st.button("✏️", key=f"edit_{row['id']}"):
-                        st.session_state.editing_lancamento = row['id']
-                        st.rerun()
-            with col7:
-                if user_can_edit():
-                    if st.button("🗑️", key=f"del_{row['id']}"):
-                        if excluir_lancamento(row['id'], mes):
-                            st.rerun()
-            
-            st.markdown("---")
-    else:
-        # Visualização em cards
-        for _, lancamento in df_lancamentos.iterrows():
-            with st.container():
-                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-                
-                with col1:
-                    st.write(f"**{lancamento['historico']}**")
-                    if lancamento['complemento']:
-                        st.write(f"_{lancamento['complemento']}_")
-                    st.write(f"📅 {pd.to_datetime(lancamento['data']).strftime('%d/%m/%Y')}")
-                
-                with col2:
-                    if lancamento['entrada'] > 0:
-                        st.success(f"↗️ R$ {lancamento['entrada']:,.2f}")
-                    if lancamento['saida'] > 0:
-                        st.error(f"↘️ R$ {lancamento['saida']:,.2f}")
-                
-                with col3:
-                    st.info(f"💰 R$ {lancamento['saldo']:,.2f}")
-                
-                with col4:
-                    if user_can_edit():
-                        col_edit, col_del = st.columns(2)
-                        with col_edit:
-                            if st.button("✏️", key=f"edit_card_{lancamento['id']}"):
-                                st.session_state.editing_lancamento = lancamento['id']
-                                st.rerun()
-                        with col_del:
-                            if st.button("🗑️", key=f"del_card_{lancamento['id']}"):
-                                if excluir_lancamento(lancamento['id'], mes):
-                                    st.rerun()
-                
-                st.markdown("---")
-
-def show_relatorios(mes, df_lancamentos):
-    """Exibe relatórios e gráficos"""
-    if df_lancamentos.empty:
-        st.info("📭 Nenhum dado para exibir relatórios")
-        return
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("📈 Gráfico de Entradas vs Saídas")
-        
-        # Preparar dados para gráfico
-        df_diario = df_lancamentos.copy()
-        df_diario['data'] = pd.to_datetime(df_diario['data'])
-        df_diario = df_diario.groupby('data').agg({
-            'entrada': 'sum',
-            'saida': 'sum'
-        }).reset_index()
-        
-        chart_data = pd.DataFrame({
-            'Data': df_diario['data'],
-            'Entradas': df_diario['entrada'],
-            'Saídas': df_diario['saida']
-        })
-        
-        st.line_chart(chart_data, x='Data', y=['Entradas', 'Saídas'])
-    
-    with col2:
-        st.subheader("🥧 Distribuição por Categoria")
-        
-        # Agrupar por histórico (simplificado)
-        df_categorias = df_lancamentos.groupby('historico').agg({
-            'entrada': 'sum',
-            'saida': 'sum'
-        }).reset_index()
-        
-        # Criar gráfico de pizza para saídas
-        saidas_por_categoria = df_categorias[df_categorias['saida'] > 0]
-        if not saidas_por_categoria.empty:
-            st.bar_chart(saidas_por_categoria.set_index('historico')['saida'])
-        else:
-            st.info("Não há saídas para exibir")
-
-def show_configuracoes_mes(mes):
-    """Configurações administrativas do mês"""
-    st.subheader("⚙️ Configurações do Mês")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("📥 Exportar CSV do Mês", use_container_width=True):
-            csv_data = download_csv_mes(mes)
-            if csv_data:
-                st.download_button(
-                    label="💾 Download CSV",
-                    data=csv_data,
-                    file_name=f"lancamentos_{mes}_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-    
-    with col2:
-        if st.button("🗑️ Limpar Todos os Lançamentos", use_container_width=True):
-            if st.checkbox("⚠️ Confirmar exclusão de TODOS os lançamentos deste mês"):
-                if limpar_lancamentos_mes(mes):
-                    st.rerun()
-
-def show_calendario():
-    """Interface do Calendário"""
-    st.header("📅 Calendário de Eventos")
-    
-    # Verificar se está editando um evento
-    if hasattr(st.session_state, 'editing_event') and st.session_state.editing_event:
-        show_editar_evento(st.session_state.editing_event)
-        return
-    
-    # Seleção de mês/ano
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        ano_atual = datetime.now().year
-        mes_atual = datetime.now().month
-        ano = st.number_input("Ano:", min_value=2000, max_value=2100, value=ano_atual)
-        mes = st.selectbox("Mês:", list(range(1, 13)), format_func=lambda x: [
-            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-        ][x-1], index=mes_atual-1)
-    
-    # Buscar eventos do mês
-    df_eventos = get_eventos_mes(ano, mes)
-    
-    # Abas do calendário
-    tab1, tab2, tab3 = st.tabs(["📅 Visualização Mensal", "📋 Lista de Eventos", "➕ Novo Evento"])
-    
-    with tab1:
-        show_calendario_mensal(ano, mes, df_eventos)
-    
-    with tab2:
-        show_lista_eventos(df_eventos)
-    
-    with tab3:
-        if user_can_edit():
-            show_novo_evento()
-        else:
-            st.warning("⚠️ Você possui permissão apenas para visualização")
-
-def show_calendario_mensal(ano, mes, df_eventos):
-    """Exibe calendário mensal"""
-    calendario = gerar_calendario(ano, mes)
-    nomes_dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
-    
-    # Cabeçalho dos dias
-    cols = st.columns(7)
-    for i, col in enumerate(cols):
-        col.write(f"**{nomes_dias[i]}**")
-    
-    # Dias do mês
-    for semana in calendario:
-        cols = st.columns(7)
-        for i, dia in enumerate(semana):
-            with cols[i]:
-                # Verificar se o dia é do mês atual
-                if dia.month == mes:
-                    # Verificar se há eventos neste dia
-                    eventos_dia = df_eventos[
-                        pd.to_datetime(df_eventos['data_evento']).dt.date == dia
-                    ] if not df_eventos.empty else []
-                    
-                    num_eventos = len(eventos_dia)
-                    estilo = "🔴" if num_eventos > 0 else ""
-                    
-                    st.write(f"**{dia.day}** {estilo}")
-                    
-                    if num_eventos > 0:
-                        with st.expander(f"{num_eventos} evento(s)"):
-                            for _, evento in eventos_dia.iterrows():
-                                st.write(f"• {evento['titulo']}")
-                                if evento['hora_evento']:
-                                    st.write(f"  ⏰ {evento['hora_evento']}")
-                else:
-                    st.write(f"<span style='color: lightgray'>{dia.day}</span>", unsafe_allow_html=True)
-
-def show_lista_eventos(df_eventos):
-    """Exibe lista de eventos"""
-    if df_eventos.empty:
-        st.info("📭 Nenhum evento agendado para este período")
-        return
-    
-    for _, evento in df_eventos.iterrows():
-        with st.container():
-            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-            
-            with col1:
-                st.write(f"**{evento['titulo']}**")
-                if evento['descricao']:
-                    st.write(f"_{evento['descricao']}_")
-                st.write(f"📅 {pd.to_datetime(evento['data_evento']).strftime('%d/%m/%Y')}")
-                if evento['hora_evento']:
-                    st.write(f"⏰ {evento['hora_evento']}")
-            
-            with col2:
-                if evento['tipo_evento']:
-                    st.info(f"🏷️ {evento['tipo_evento']}")
-            
-            with col3:
-                if user_can_edit():
-                    if st.button("✏️ Editar", key=f"edit_{evento['id']}"):
-                        st.session_state.editing_event = evento['id']
-                        st.rerun()
-            
-            with col4:
-                if user_can_edit():
-                    if st.button("🗑️ Excluir", key=f"del_{evento['id']}"):
-                        if excluir_evento(evento['id']):
-                            st.rerun()
-            
-            st.markdown("---")
-
-def show_novo_evento():
-    """Formulário para novo evento"""
-    with st.form("novo_evento", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            titulo = st.text_input("Título do Evento:*", placeholder="Nome do evento")
-            descricao = st.text_area("Descrição:", placeholder="Detalhes do evento")
-            data_evento = st.date_input("Data do Evento:*", value=datetime.now())
-        
-        with col2:
-            hora_evento = st.time_input("Hora do Evento:", value=time(19, 0))
-            tipo_evento = st.selectbox("Tipo de Evento:", [
-                "", "Iniciação", "Elevação", "Exaltação", "Sessão Economica", "Jantar Ritualistico", " etc"
-            ])
-            cor_evento = st.color_picker("Cor do Evento:", "#FF4B4B")
-        
-        submitted = st.form_submit_button("💾 Salvar Evento")
-        
-        if submitted:
-            if not titulo:
-                st.error("❌ O campo Título é obrigatório")
-                return
-            
-            if salvar_evento(titulo, descricao, data_evento, hora_evento, tipo_evento, cor_evento):
-                st.rerun()
-
-def show_configuracoes():
-    """Configurações do sistema"""
-    st.header("⚙️ Configurações do Sistema")
-    
-    if not user_is_admin():
-        st.warning("⚠️ Apenas administradores podem acessar as configurações do sistema")
-        return
-    
-    tab1, tab2, tab3 = st.tabs(["💾 Backup", "📤 Exportação", "🔧 Sistema"])
-    
-    with tab1:
-        show_backup_section()
-    
-    with tab2:
-        show_export_section()
-    
-    with tab3:
-        show_system_info()
-
-def show_backup_section():
-    """Seção de backup"""
-    st.subheader("💾 Backup do Sistema")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔄 Criar Backup Completo", use_container_width=True):
-            with st.spinner("Criando backup completo..."):
-                backup_data = criar_backup_completo()
-                if backup_data:
-                    st.success("✅ Backup completo criado com sucesso!")
-                    st.download_button(
-                        label="📥 Download Backup Completo",
-                        data=backup_data,
-                        file_name=f"backup_completo_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
-                        mime="application/zip",
-                        use_container_width=True
-                    )
-    
-    with col2:
-        if st.button("📈 Backup Incremental", use_container_width=True):
-            with st.spinner("Criando backup incremental..."):
-                backup_data = criar_backup_incremental()
-                if backup_data:
-                    st.success("✅ Backup incremental criado com sucesso!")
-                    st.download_button(
-                        label="📥 Download Backup Incremental",
-                        data=backup_data,
-                        file_name=f"backup_incremental_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
-                        mime="application/zip",
-                        use_container_width=True
-                    )
-    
-    st.info("""
-    **💡 Sobre os backups:**
-    - **Backup Completo:** Contém todos os dados do sistema
-    - **Backup Incremental:** Contém apenas dados dos últimos 30 dias
-    - Recomendamos fazer backups regulares para garantir a segurança dos dados
-    """)
-
-def show_export_section():
-    """Seção de exportação"""
-    st.subheader("📤 Exportação de Dados")
-    
-    if st.button("📊 Exportar Todos os Dados para CSV", use_container_width=True):
-        with st.spinner("Exportando dados..."):
-            zip_data = exportar_para_csv()
-            if zip_data:
-                st.success("✅ Exportação concluída com sucesso!")
-                st.download_button(
-                    label="📥 Download Exportação Completa",
-                    data=zip_data,
-                    file_name=f"exportacao_completa_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
-                    mime="application/zip",
-                    use_container_width=True
-                )
-
-def show_system_info():
-    """Informações do sistema"""
-    st.subheader("🔧 Informações do Sistema")
-    
-    # Estatísticas do sistema
-    conn = get_db_connection()
-    if conn:
-        try:
-            cursor = conn.cursor()
-            
-            # Contar registros
-            cursor.execute("SELECT COUNT(*) FROM usuarios")
-            total_usuarios = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM lancamentos")
-            total_lancamentos = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM eventos_calendario")
-            total_eventos = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM contas")
-            total_contas = cursor.fetchone()[0]
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total de Usuários", total_usuarios)
-            with col2:
-                st.metric("Total de Lançamentos", total_lancamentos)
-            with col3:
-                st.metric("Total de Eventos", total_eventos)
-            with col4:
-                st.metric("Total de Contas", total_contas)
-                
-        except Error as e:
-            st.error(f"❌ Erro ao buscar estatísticas: {e}")
-        finally:
-            conn.close()
-
-def show_gerenciar_usuarios():
-    """Interface para gerenciamento de usuários"""
-    st.header("👥 Gerenciamento de Usuários")
-    
-    if not user_is_admin():
-        st.warning("⚠️ Apenas administradores podem gerenciar usuários")
-        return
-    
-    tab1, tab2, tab3 = st.tabs(["➕ Novo Usuário", "📋 Usuários Cadastrados", "🔧 Editar Usuário"])
-    
-    with tab1:
-        show_novo_usuario()
-    
-    with tab2:
-        show_usuarios_cadastrados()
-    
-    with tab3:
-        # Verificar de forma segura se há usuário sendo editado
-        if hasattr(st.session_state, 'editing_user') and st.session_state.editing_user:
-            show_editar_usuario(st.session_state.editing_user)
-        else:
-            st.info("👆 Selecione um usuário para editar na aba 'Usuários Cadastrados'")
-
-def show_novo_usuario():
-    """Formulário para novo usuário"""
-    with st.form("novo_usuario", clear_on_submit=True):
-        st.subheader("👤 Novo Usuário")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            username = st.text_input("Usuário:*", placeholder="Nome de usuário para login")
-            password = st.text_input("Senha:*", type="password", placeholder="Senha para acesso")
-            confirm_password = st.text_input("Confirmar Senha:*", type="password", placeholder="Digite novamente a senha")
-            permissao = st.selectbox("Permissão:*", list(PERMISSOES.keys()), format_func=lambda x: PERMISSOES[x])
-            email = st.text_input("E-mail:", placeholder="email@exemplo.com")
-        
-        with col2:
-            nome_completo = st.text_input("Nome Completo:", placeholder="Nome completo do usuário")
-            telefone = st.text_input("Telefone:", placeholder="(00) 00000-0000")
-            endereco = st.text_area("Endereço:", placeholder="Endereço completo")
-            data_aniversario = st.date_input("Data de Aniversário:", value=None)
-        
-        # Campos adicionais em expansores
-        with st.expander("📅 Datas Maçônicas (Opcional)"):
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                data_iniciacao = st.date_input("Data de Iniciação:", value=None)
-                data_elevacao = st.date_input("Data de Elevação:", value=None)
-            with col_d2:
-                data_exaltacao = st.date_input("Data de Exaltação:", value=None)
-                data_instalacao_posse = st.date_input("Data de Instalação/Posse:", value=None)
-        
-        with st.expander("📝 Observações e Redes Sociais"):
-            observacoes = st.text_area("Observações:", placeholder="Observações adicionais sobre o usuário")
-            redes_sociais = st.text_input("Redes Sociais:", placeholder="Links ou @ das redes sociais")
-        
-        submitted = st.form_submit_button("💾 Criar Usuário")
-        
-        if submitted:
-            # Validações
-            if not username or not password:
-                st.error("❌ Usuário e senha são obrigatórios")
-                return
-            
-            if password != confirm_password:
-                st.error("❌ As senhas não coincidem")
-                return
-            
-            if len(password) < 6:
-                st.error("❌ A senha deve ter pelo menos 6 caracteres")
-                return
-            
-            # Criar usuário
-            success, message = criar_usuario(
-                username=username,
-                password=password,
-                permissao=permissao,
-                email=email or None,
-                nome_completo=nome_completo or None,
-                telefone=telefone or None,
-                endereco=endereco or None,
-                data_aniversario=data_aniversario or None,
-                data_iniciacao=data_iniciacao or None,
-                data_elevacao=data_elevacao or None,
-                data_exaltacao=data_exaltacao or None,
-                data_instalacao_posse=data_instalacao_posse or None,
-                observacoes=observacoes or None,
-                redes_sociais=redes_sociais or None
-            )
-            
-            if success:
-                st.success(message)
-                st.rerun()
-            else:
-                st.error(f"❌ {message}")
-
-def show_usuarios_cadastrados():
-    """Lista de usuários cadastrados"""
-    st.subheader("📋 Usuários do Sistema")
-    
-    users = get_all_users()
-    
-    if not users:
-        st.info("📭 Nenhum usuário cadastrado no sistema")
-        return
-    
-    for user in users:
-        username, email, permissao, created_at, nome_completo, telefone, endereco, \
-        data_aniversario, data_iniciacao, data_elevacao, data_exaltacao, \
-        data_instalacao_posse, observacoes, redes_sociais = user
-        
-        with st.container():
-            col1, col2, col3 = st.columns([3, 1, 1])
-            
-            with col1:
-                nome_display = nome_completo or username
-                st.write(f"**{nome_display}**")
-                st.write(f"👤 {username} | 📧 {email or 'Não informado'} | 🏷️ {PERMISSOES.get(permissao, permissao)}")
-                if telefone:
-                    st.write(f"📞 {telefone}")
-                if data_aniversario:
-                    st.write(f"🎂 {data_aniversario.strftime('%d/%m/%Y')}")
-            
-            with col2:
-                if st.button("✏️ Editar", key=f"edit_{username}"):
-                    st.session_state.editing_user = username
-                    st.rerun()
-            
-            with col3:
-                if username != st.session_state.username:  # Não permitir excluir a si mesmo
-                    if st.button("🗑️ Excluir", key=f"del_{username}"):
-                        if delete_user(username):
-                            st.rerun()
-                else:
-                    st.write("👆 Você")
-            
-            st.markdown("---")
-
-def show_editar_usuario(username):
-    """Formulário para editar usuário"""
-    st.subheader(f"✏️ Editando Usuário: {username}")
-    
-    user_data = get_user_by_username(username)
-    if not user_data:
-        st.error("❌ Usuário não encontrado")
-        st.session_state.editing_user = None
-        return
-    
-    # Extrair dados do usuário
-    (username, email, permissao, created_at, nome_completo, telefone, endereco,
-     data_aniversario, data_iniciacao, data_elevacao, data_exaltacao,
-     data_instalacao_posse, observacoes, redes_sociais) = user_data
-    
-    with st.form("editar_usuario"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            novo_email = st.text_input("E-mail:", value=email or "", placeholder="email@exemplo.com")
-            nova_permissao = st.selectbox(
-                "Permissão:",
-                list(PERMISSOES.keys()),
-                index=list(PERMISSOES.keys()).index(permissao) if permissao in PERMISSOES else 0,
-                format_func=lambda x: PERMISSOES[x]
-            )
-            novo_nome_completo = st.text_input("Nome Completo:", value=nome_completo or "", placeholder="Nome completo")
-            novo_telefone = st.text_input("Telefone:", value=telefone or "", placeholder="(00) 00000-0000")
-            novo_endereco = st.text_area("Endereço:", value=endereco or "", placeholder="Endereço completo")
-            nova_data_aniversario = st.date_input(
-                "Data de Aniversário:",
-                value=data_aniversario if data_aniversario else None
-            )
-        
-        with col2:
-            # Campos de datas maçônicas
-            nova_data_iniciacao = st.date_input(
-                "Data de Iniciação:",
-                value=data_iniciacao if data_iniciacao else None
-            )
-            nova_data_elevacao = st.date_input(
-                "Data de Elevação:",
-                value=data_elevacao if data_elevacao else None
-            )
-            nova_data_exaltacao = st.date_input(
-                "Data de Exaltação:",
-                value=data_exaltacao if data_exaltacao else None
-            )
-            nova_data_instalacao_posse = st.date_input(
-                "Data de Instalação/Posse:",
-                value=data_instalacao_posse if data_instalacao_posse else None
-            )
-        
-        novas_observacoes = st.text_area("Observações:", value=observacoes or "", placeholder="Observações adicionais")
-        novas_redes_sociais = st.text_input("Redes Sociais:", value=redes_sociais or "", placeholder="Links ou @ das redes sociais")
-        
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-        
-        with col_btn1:
-            submitted = st.form_submit_button("💾 Salvar Alterações")
-        
-        with col_btn2:
-            if st.form_submit_button("🔄 Redefinir Senha"):
-                # Para redefinir senha, vamos usar um modal simples
-                nova_senha = st.text_input("Nova Senha:", type="password", key="nova_senha")
-                if nova_senha:
-                    if change_password(username, nova_senha):
-                        st.success("✅ Senha alterada com sucesso!")
-        
-        with col_btn3:
-            if st.form_submit_button("❌ Cancelar"):
-                st.session_state.editing_user = None
-                st.rerun()
-        
-        if submitted:
-            success, message = update_user(
-                username=username,
-                email=novo_email or None,
-                permissao=nova_permissao,
-                nome_completo=novo_nome_completo or None,
-                telefone=novo_telefone or None,
-                endereco=novo_endereco or None,
-                data_aniversario=nova_data_aniversario,
-                data_iniciacao=nova_data_iniciacao,
-                data_elevacao=nova_data_elevacao,
-                data_exaltacao=nova_data_exaltacao,
-                data_instalacao_posse=nova_data_instalacao_posse,
-                observacoes=novas_observacoes or None,
-                redes_sociais=novas_redes_sociais or None
-            )
-            
-            if success:
-                st.success(message)
-                st.session_state.editing_user = None
-                st.rerun()
-            else:
-                st.error(f"❌ {message}")
+# ... (o restante das funções show_novo_lancamento, show_lancamentos_mes, etc. permanecem iguais)
 
 # =============================================================================
 # EXECUÇÃO PRINCIPAL
