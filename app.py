@@ -1213,7 +1213,6 @@ def show_editar_evento(evento_id):
         if st.button("❌ Cancelar", use_container_width=True, key="cancelar_edicao"):
             st.session_state.editing_event = None
             st.rerun()
-
 # =============================================================================
 # FUNÇÕES PARA AGENDA DE CONTATOS - LAYOUT MOBILE COM TODAS INFORMAÇÕES
 # =============================================================================
@@ -1585,91 +1584,6 @@ def visualizar_agenda_contatos():
             st.markdown("---")
 
 # =============================================================================
-# FUNÇÃO PARA O GERADOR DE CONVITES EXTERNO
-# =============================================================================
-
-def show_gerador_convites_externo():
-    """Redireciona para o aplicativo de convites externo"""
-    st.header("🎉 Gerador de Convites")
-    
-    # Verificação de permissão
-    if not user_can_edit():
-        st.warning("⚠️ Você precisa de permissão de edição para acessar o gerador de convites")
-        return
-    
-    st.info("""
-    **📋 Sobre o Gerador de Convites:**
-    - Gere convites personalizados para eventos da loja
-    - Use modelos pré-definidos ou faça upload do seu próprio
-    - Customize textos, fontes e cores
-    - Exporte em formato PDF para impressão
-    """)
-    
-    # Opções para abrir o gerador de convites
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🛠️ Acessar Gerador de Convites")
-        st.markdown("""
-        Clique no botão abaixo para abrir o Gerador de Convites em uma nova aba/página.
-        
-        **Funcionalidades disponíveis:**
-        - Upload de modelos de convite
-        - Personalização de textos
-        - Configuração de fontes e cores
-        - Geração de PDF
-        """)
-        
-        # Botão para abrir o app_convites.py
-        if st.button("🚀 Abrir Gerador de Convites", use_container_width=True):
-            st.success("✅ Redirecionando para o Gerador de Convites...")
-            st.info("🔗 Se o redirecionamento automático não funcionar, use o link abaixo:")
-            st.markdown('[📎 Acessar Gerador de Convites](./app_convites)', unsafe_allow_html=True)
-    
-    with col2:
-        st.subheader("📘 Instruções Rápidas")
-        st.markdown("""
-        **Como usar:**
-        1. Faça upload do modelo do convite (JPG/PNG)
-        2. Configure os textos nas posições indicadas
-        3. Ajuste tamanhos e cores das fontes
-        4. Visualize a prévia
-        5. Gere e baixe o PDF
-        
-        **Posições dos textos:**
-        - Texto 1: Nome do Venerável Mestre
-        - Texto 2: Descrição da sessão
-        - Texto 3: Nome do candidato 1
-        - Texto 4: Nome do candidato 2
-        - Texto 5: Data e hora do evento
-        """)
-    
-    st.markdown("---")
-    
-    # Informações adicionais
-    st.subheader("ℹ️ Informações Importantes")
-    
-    col_info1, col_info2 = st.columns(2)
-    
-    with col_info1:
-        st.markdown("""
-        **📝 Requisitos do Modelo:**
-        - Formato: JPG ou PNG
-        - Proporção recomendada: A4 paisagem
-        - Resolução: Mínimo 842x595 pixels
-        - Deixe áreas em branco para os textos
-        """)
-    
-    with col_info2:
-        st.markdown("""
-        **💡 Dicas:**
-        - Use modelos com boa resolução
-        - Teste diferentes tamanhos de fonte
-        - Verifique sempre a pré-visualização
-        - Para impressão, use papel de qualidade
-        """)
-
-# =============================================================================
 # INTERFACE PRINCIPAL
 # =============================================================================
 
@@ -1748,17 +1662,13 @@ def show_main_application():
         st.write(f"**Permissão:** {PERMISSOES.get(st.session_state.permissao, st.session_state.permissao)}")
         st.markdown("---")
         
-        # MENU DE NAVEGAÇÃO ATUALIZADO - ADICIONANDO GERADOR DE CONVITES
+        # Resto do menu de navegação (mantido igual)
         menu_options = ["📊 Livro Caixa", "📅 Calendário"]
         
         if user_can_edit():
             menu_options.append("⚙️ Configurações")
         
         menu_options.append("📒 Agenda de Contatos")
-        
-        # ADIÇÃO DO GERADOR DE CONVITES - disponível para quem pode editar
-        if user_can_edit():
-            menu_options.append("🎉 Gerador de Convites")
         
         if user_is_admin():
             menu_options.append("👥 Gerenciar Usuários")
@@ -1767,13 +1677,11 @@ def show_main_application():
         
         st.markdown("---")
         
-        # Informações do sistema ATUALIZADAS
+        # Informações do sistema
         st.write("**💡 Dicas:**")
         st.write("- Use o Livro Caixa para registrar entradas e saídas")
         st.write("- O calendário ajuda no planejamento de eventos")
         st.write("- A agenda de contatos mostra informações dos membros")
-        if user_can_edit():
-            st.write("- Use o Gerador de Convites para criar convites personalizados")
         if user_is_admin():
             st.write("- Como admin, você pode gerenciar usuários")
         
@@ -1789,7 +1697,7 @@ def show_main_application():
             logout_user()
             st.rerun()
     
-    # NAVEGAÇÃO PRINCIPAL ATUALIZADA
+    # Navegação principal
     if selected_menu == "📊 Livro Caixa":
         show_livro_caixa()
     elif selected_menu == "📅 Calendário":
@@ -1800,8 +1708,6 @@ def show_main_application():
         show_gerenciar_usuarios()
     elif selected_menu == "📒 Agenda de Contatos":
         visualizar_agenda_contatos()
-    elif selected_menu == "🎉 Gerador de Convites" and user_can_edit():
-        show_gerador_convites_externo()
 
 def show_livro_caixa():
     """Interface do Livro Caixa"""
