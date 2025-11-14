@@ -1132,7 +1132,7 @@ def show_editar_lancamento(lancamento_id, mes):
         col1, col2 = st.columns(2)
         
         with col1:
-            data = st.date_input("Data:", value=lancamento[2])  # data
+            data = st.date_input("Data:", value=lancamento[2], min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))  # data
             historico = st.text_input("Histórico:*", value=lancamento[3], placeholder="Descrição do lançamento")  # historico
             complemento = st.text_area("Complemento:", value=lancamento[4] or "", placeholder="Informações adicionais")  # complemento
         
@@ -1180,7 +1180,7 @@ def show_editar_evento(evento_id):
     with col1:
         titulo = st.text_input("Título do Evento:*", value=evento[1], placeholder="Nome do evento", key="edit_titulo")
         descricao = st.text_area("Descrição:", value=evento[2] or "", placeholder="Detalhes do evento", key="edit_descricao")
-        data_evento = st.date_input("Data do Evento:*", value=evento[3], key="edit_data")
+        data_evento = st.date_input("Data do Evento:*", value=evento[3], min_value=date(1900, 1, 1), max_value=date(2100, 12, 31), key="edit_data")
     
     with col2:
         # CORREÇÃO: Tratamento seguro para hora_evento
@@ -1835,7 +1835,7 @@ def show_novo_lancamento(mes):
         col1, col2 = st.columns(2)
         
         with col1:
-            data = st.date_input("Data:", value=datetime.now())
+            data = st.date_input("Data:", value=datetime.now(), min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
             historico = st.text_input("Histórico:*", placeholder="Descrição do lançamento")
             complemento = st.text_area("Complemento:", placeholder="Informações adicionais")
         
@@ -1996,7 +1996,7 @@ def show_calendario():
         show_editar_evento(st.session_state.editing_event)
         return
     
-    # Seleção de mês/ano
+    # Seleção de mês/ano - CORRIGIDO PARA RANGE 1900-2100
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         ano_atual = datetime.now().year
@@ -2105,7 +2105,7 @@ def show_novo_evento():
         with col1:
             titulo = st.text_input("Título do Evento:*", placeholder="Nome do evento")
             descricao = st.text_area("Descrição:", placeholder="Detalhes do evento")
-            data_evento = st.date_input("Data do Evento:*", value=datetime.now())
+            data_evento = st.date_input("Data do Evento:*", value=datetime.now(), min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
         
         with col2:
             hora_evento = st.time_input("Hora do Evento:", value=time(19, 0))
@@ -2280,17 +2280,17 @@ def show_novo_usuario():
             nome_completo = st.text_input("Nome Completo:", placeholder="Nome completo do usuário")
             telefone = st.text_input("Telefone:", placeholder="(00) 00000-0000")
             endereco = st.text_area("Endereço:", placeholder="Endereço completo")
-            data_aniversario = st.date_input("Data de Aniversário:", value=None)
+            data_aniversario = st.date_input("Data de Aniversário:", value=None, min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
         
         # Campos adicionais em expansores
         with st.expander("📅 Datas Maçônicas (Opcional)"):
             col_d1, col_d2 = st.columns(2)
             with col_d1:
-                data_iniciacao = st.date_input("Data de Iniciação:", value=None)
-                data_elevacao = st.date_input("Data de Elevação:", value=None)
+                data_iniciacao = st.date_input("Data de Iniciação:", value=None, min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
+                data_elevacao = st.date_input("Data de Elevação:", value=None, min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
             with col_d2:
-                data_exaltacao = st.date_input("Data de Exaltação:", value=None)
-                data_instalacao_posse = st.date_input("Data de Instalação/Posse:", value=None)
+                data_exaltacao = st.date_input("Data de Exaltação:", value=None, min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
+                data_instalacao_posse = st.date_input("Data de Instalação/Posse:", value=None, min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
         
         with st.expander("📝 Observações e Redes Sociais"):
             observacoes = st.text_area("Observações:", placeholder="Observações adicionais sobre o usuário")
@@ -2409,26 +2409,36 @@ def show_editar_usuario(username):
             novo_endereco = st.text_area("Endereço:", value=endereco or "", placeholder="Endereço completo")
             nova_data_aniversario = st.date_input(
                 "Data de Aniversário:",
-                value=data_aniversario if data_aniversario else None
+                value=data_aniversario if data_aniversario else None,
+                min_value=date(1900, 1, 1), 
+                max_value=date(2100, 12, 31)
             )
         
         with col2:
             # Campos de datas maçônicas
             nova_data_iniciacao = st.date_input(
                 "Data de Iniciação:",
-                value=data_iniciacao if data_iniciacao else None
+                value=data_iniciacao if data_iniciacao else None,
+                min_value=date(1900, 1, 1), 
+                max_value=date(2100, 12, 31)
             )
             nova_data_elevacao = st.date_input(
                 "Data de Elevação:",
-                value=data_elevacao if data_elevacao else None
+                value=data_elevacao if data_elevacao else None,
+                min_value=date(1900, 1, 1), 
+                max_value=date(2100, 12, 31)
             )
             nova_data_exaltacao = st.date_input(
                 "Data de Exaltação:",
-                value=data_exaltacao if data_exaltacao else None
+                value=data_exaltacao if data_exaltacao else None,
+                min_value=date(1900, 1, 1), 
+                max_value=date(2100, 12, 31)
             )
             nova_data_instalacao_posse = st.date_input(
                 "Data de Instalação/Posse:",
-                value=data_instalacao_posse if data_instalacao_posse else None
+                value=data_instalacao_posse if data_instalacao_posse else None,
+                min_value=date(1900, 1, 1), 
+                max_value=date(2100, 12, 31)
             )
         
         novas_observacoes = st.text_area("Observações:", value=observacoes or "", placeholder="Observações adicionais")
