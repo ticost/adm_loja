@@ -2001,7 +2001,7 @@ def show_calendario():
     with col1:
         ano_atual = datetime.now().year
         mes_atual = datetime.now().month
-        ano = st.number_input("Ano:", min_value=2000, max_value=2100, value=ano_atual)
+        ano = st.number_input("Ano:", min_value=1900, max_value=2100, value=ano_atual)
         mes = st.selectbox("Mês:", list(range(1, 13)), format_func=lambda x: [
             "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
             "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
